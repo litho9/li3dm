@@ -20,3 +20,28 @@ for data in bpy.data.objects["z"].data.uv_layers["TEXCOORD.xy"].data:
 # uvMap = obj.data.uv_layers["TEXCOORD.xy"]
 # for uvIndex in range(len(uvMap.data)):
 #     uvMap.data[uvIndex].uv = Scale2D(uvMap.data[uvIndex].uv, scale, pivot)
+
+bm0 = bmesh.new()
+depsgraph = bpy.context.evaluated_depsgraph_get()
+for name in ["AyakaDress-vb0=0107925f.txt","AyakaBody-vb0=0107925f.txt","AyakaHead-vb0=0107925f.txt"]:
+    obj = bpy.context.scene.objects[name]
+    bm = bmesh.new()
+    bm.from_object(obj, depsgraph)
+    bm.verts.ensure_lookup_table()
+    #    uv = bm.loops.layers.uv.active
+    uv_layer = bm.loops.layers.uv.new()
+    for face in bm.faces:
+        for loop in face.loops:
+            [u, v] = obj.data.uv_layers[0].data[loop.index].uv
+            loop[uv_layer].uv = (getattr(obj, 'pivot_u', 0) + obj['scale'] * u,
+                                 getattr(obj, 'pivot_v', 0) + obj['scale'] * v)
+                                 #    for data in uv_layer:
+                                 #        data.uv = (obj['pivot_u'] + (obj['scale'] or 0) * data.uv[0],
+                                 #                   obj['pivot_v'] + (obj['scale'] or 0) * data.uv[1])
+                                 bm0.from_mesh(bm)
+
+
+mesh = bpy.data.meshes.new('Test')
+bm0.to_mesh(mesh)
+mesh.update()
+bm0.free()

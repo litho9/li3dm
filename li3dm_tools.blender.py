@@ -269,18 +269,19 @@ def export(path, name):
                 arr = [-co.x, co.z, -co.y]
                 arr += [loop.normal[0], -loop.normal[2], loop.normal[1]]
                 arr += [-loop.tangent[2], -loop.tangent[0], loop.tangent[1], loop.bitangent_sign]
-                bufPos.write(numpy.fromiter(arr, numpy.float32).tobytes())  # 32 bits each
+                bufPos.write(numpy.fromiter(arr, numpy.float32))  # 32 bits each
 
                 c = numpy.fromiter(color[loop.vertex_index].color, numpy.float32) * 255.0
-                bufTex.write(numpy.around(c).astype(numpy.uint8).tobytes())
+                bufTex.write(numpy.around(c).astype(numpy.uint8))
                 for uv in [tex.data[loop.index].uv for tex in obj.data.uv_layers]:
-                    bufTex.write(numpy.fromiter([uv[0], 1 - uv[1]], numpy.float32).tobytes())
+                    bufTex.write(numpy.fromiter([uv[0], 1 - uv[1]], numpy.float32))
 
             for v in obj.data.vertices:
-                weight = [v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)]
-                index = [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]
-                bufBlend.write(b''.join(struct.pack('<f', v) for v in weight))
-                bufBlend.write(numpy.fromiter(index, numpy.int32).tobytes())
+                g = v.groups
+                weight = [g[i].weight if i < len(g) else .0 for i in range(4)]
+                index = [g[i].group if i < len(g) else 0 for i in range(4)]
+                bufBlend.write(numpy.fromiter(weight, numpy.float32))
+                bufBlend.write(numpy.fromiter(index, numpy.int32))
 
             offset += max_loop + 1
 
@@ -333,13 +334,13 @@ def export_furniture_with_toggles(path:str, name:str, invert=True):
                 h = (loop.vertex_index, u, v)  # hash the vertex index and the UV coordinates
                 if h in index_map:
                     ib.write(numpy.uint32(index_map[h]))
-                    continue
+                    continue  # skip duplicates
                 index_map[h] = idx
                 ib.write(numpy.uint32(idx))  # same as ib.write(numpy.uint32(index_map[h]))
                 idx += 1
 
                 co = obj.data.vertices[loop.vertex_index].co
-                pos = [co.x, co.y, -co.z if invert else co.z]
+                pos = [co.x, co.y, -co.z if invert else co.z]  # 'invert' needs Mesh->Normals->Flip
                 buf.write(numpy.fromiter(pos, numpy.float16))
                 buf.write(b'\x00\x3c')
 
@@ -352,22 +353,24 @@ def export_furniture_with_toggles(path:str, name:str, invert=True):
 
                 tan = numpy.fromiter(loop.tangent, numpy.float16)
                 buf.write((tan * 128.0).astype(numpy.int8))
-                buf.write(b'\x81' if loop.bitangent_sign > 0 else b'\x7f')
+                buf.write(b'\x81' if loop.bitangent_sign > 0 else b'\x7f')  # -1 or 1
 
-            obj_name = obj.name.split('_')[1]
-            if obj['key']:
-                ini_consts += f"global persist ${obj_name} = 0\n"
+            obj_name = obj.name.split('_')[1]  # remove the part used for sorting (Ex.: "01_Mona")
+            if obj['key']:  # property "key" marks mesh as part of a toggle
+                ini_consts += f"global persist ${obj_name} = 1\n"
                 ini_keys += f"[KeySwap{obj_name}]\nkey = {obj['key']}\ntype = cycle\n${obj_name} = 0,1\n"
                 ini_draws += f"if ${obj_name} == 1\n  drawindexed = {len(obj.data.loops)}, {offset}, 0\nendif\n"
             offset += len(obj.data.loops)
 
     with open(f"{path}/{name}.ini", "w") as ini:
-        ini.write(f"; {name}{ini_consts}{ini_keys}\n\n")
+        ini.write(f"; {name}\n\n")
+        if ini_consts:
+            ini.write(f"[Constants]\n{ini_consts}\n{ini_keys}\n\n")
         ini.write(f"[TextureOverrideVB]\nhash = 2554c4c5\nvb0 = ResourceVB\n\n")
         ini.write(f"[ResourceVB]\ntype = Buffer\nstride = 24\nfilename = {name}.buf\n\n")
         ini.write(f"[TextureOverrideIB0]\nhash = 5fc31415\nhandling = skip\n\n")
         ini.write(f"[TextureOverrideIB]\nhash = 5fc31415\nmatch_first_index = 0\nib = ResourceIB\n{ini_draws or 'drawindexed = auto'}\n\n")
-        ini.write(f"[ResourceCarpetSunscorchedIB]\ntype = Buffer\nformat = DXGI_FORMAT_R32_UINT\nfilename = {name}.ib\n")
+        ini.write(f"[ResourceIB]\ntype = Buffer\nformat = DXGI_FORMAT_R32_UINT\nfilename = {name}.ib\n")
 
 
 def menu_func_import_fa(self, context):
