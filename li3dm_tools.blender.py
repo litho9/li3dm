@@ -285,37 +285,37 @@ def export(path, name):
 
             offset += max_loop + 1
 
-def export_furniture(path:str, name:str, invert=True):
-    with (open(f"{path}/{name}.buf", "wb") as buf,
-          open(f"{path}/{name}.ib", "wb") as ib):
+# obj = bpy.context.selected_objects[0]
+# log([g.name for g in obj.vertex_groups])
+
+def export_furniture(name:str, invert=True):
+    with (open(f"{name}.buf", "wb") as buf,
+          open(f"{name}.ib", "wb") as ib):
         obj = bpy.context.selected_objects[0].data
         obj.calc_tangents()
         index_map = {}
         idx = 0
         for loop in obj.loops:
-            uv = obj.uv_layers[0].data[loop.index].uv
+            co = obj.vertices[loop.vertex_index].co
+            [u, v] = obj.uv_layers[0].data[loop.index].uv
+            nor = numpy.fromiter(loop.normal, numpy.float32)
+            tan = numpy.fromiter(loop.tangent, numpy.float32)
 
-            h = (loop.vertex_index, uv[0], uv[1])
-            if h in index_map[loop.vertex_index]:
+            h = (loop.vertex_index, u, v, nor[0], nor[1], nor[2])
+            if h in index_map:
                 ib.write(numpy.uint32(index_map[h]))
                 continue
             index_map[h] = idx
             ib.write(numpy.uint32(idx))  # ib.write(numpy.uint32(index_map[h]))
             idx += 1
 
-            co = obj.vertices[loop.vertex_index].co
-            pos = [co.x, co.y, -co.z if invert else co.z]
+            pos = [-co.x, co.z, -co.y]
             buf.write(numpy.fromiter(pos, numpy.float16))
             buf.write(b'\x00\x3c')
-
-            nor = numpy.fromiter(loop.normal, numpy.float32)
             buf.write((nor * 128.0).astype(numpy.int8))
             buf.write(b'\x00')
-
-            buf.write(numpy.fromiter([uv[0], 1 - uv[1]], numpy.float16))
+            buf.write(numpy.fromiter([u, 1 - v], numpy.float16))
             buf.write(b'\x00\x00\x00\x00')
-
-            tan = numpy.fromiter(loop.tangent, numpy.float32)
             buf.write((tan * 128.0).astype(numpy.int8))
             buf.write(b'\x81' if loop.bitangent_sign > 0 else b'\x7f')
 
