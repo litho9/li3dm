@@ -4,7 +4,7 @@ from glob import glob
 
 def prop(file:str, key:str): idx = file.index(key) + len(key) + 1; return file[idx:idx+8]
 
-def collect_furniture(path:str, name:str, vb:str):
+def collect(path:str, name:str, vb:str):
     os.chdir(path)
     in_dir = glob("FrameAnalysis*")[-1]
 
@@ -27,7 +27,6 @@ if __name__ == "__main__":
     start = time.time()
 
     path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev"
-    collect_furniture(path0, "HIABox", "d4c6ca97")
+    # collect(path0, "HIABox", "d4c6ca97")
 
     print(f"Operation completed in {int((time.time()-start)*1000)}ms")
-

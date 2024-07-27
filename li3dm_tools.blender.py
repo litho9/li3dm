@@ -12,6 +12,7 @@ import textwrap
 import shutil
 import logging
 import sys
+from glob import glob
 
 # import vendor.bpy as bpy
 # from vendor.bpy_extras.io_utils import unpack_list, ImportHelper, ExportHelper, axis_conversion, orientation_helper
@@ -141,7 +142,69 @@ def import_mesh_from_frame_analysis(name, ib, vb, diffuse):
 
     return obj
 
+f16 = lambda buf: numpy.frombuffer(buf.read(2), numpy.float16)
 f32 = lambda buf: numpy.frombuffer(buf.read(4), numpy.float32)
+f64 = lambda buf: numpy.frombuffer(buf.read(8), numpy.float64)
+
+def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
+    files = glob(f"{path}/{name}-b*.buf")
+    pos, tex, ib, blend = [open(f, "rb") for f in files]
+    vertex_count = os.path.getsize(os.path.join(path, files[0])) // 40
+    positions, normals, colors, indices, weights = [], [], [], [], []
+    uvs = [[] for _ in range(len(tex_fns))]
+    for i in range(vertex_count):
+        [px, py, pz, nx, ny, nz] = numpy.frombuffer(pos.read(24), numpy.float32)
+        positions.append((-px, py, pz))
+        normals.append((-nx, ny, nz))
+        pos.read(16)  # throw tangent info away, it will be recalculated on export
+
+        [r, g, b, a] = numpy.frombuffer(tex.read(4), numpy.uint8)
+        colors.append((r, g, b, a))
+        for j, tex_fn in enumerate(tex_fns):
+            uvs[j].append([tex_fn(tex), 1 - tex_fn(tex)])
+
+        weights.append(numpy.frombuffer(blend.read(16), numpy.float32))
+        indices.append(numpy.frombuffer(blend.read(16), numpy.int32))
+
+    ib_section = numpy.frombuffer(bytearray(ib.read()), numpy.uint16)
+    faces = [list(reversed(ib_section[i*3:i*3+3])) for i in range(len(ib_section)//3)]
+
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    mesh.from_pydata(positions, [], faces)
+    bpy.context.scene.collection.objects.link(obj)
+    mesh.use_auto_smooth = True
+    mesh.normals_split_custom_set_from_vertices(normals)
+
+    color_layer = mesh.vertex_colors.new(name='Color')
+    for l in mesh.loops:
+        color_layer.data[l.index].color = colors[l.vertex_index]
+    for i, uv in enumerate(uvs):
+        uv_layer = mesh.uv_layers.new(name=f"TEXCOORD{i}")
+        for l in mesh.loops:
+            uv_layer.data[l.index].uv = uv[l.vertex_index]
+    for i in range(max(itertools.chain(*indices)) + 1):
+        obj.vertex_groups.new(name=str(i))
+    for vid in range(len(weights)):
+        for w, i in zip(weights[vid], indices[vid]):
+            if w != 0:
+                obj.vertex_groups[i].add((vid,), w, 'REPLACE')
+
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=.000001)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    for diffuse in glob(f"{path}/{name}*.png"):
+        mat = bpy.data.materials.new(name=f"LynMaterial")
+        obj.data.materials.append(mat)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
+        tex_image = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        tex_image.image = bpy.data.images.load(diffuse)
+        mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
+
 
 def import_collected(path:str):
     files = [f for f in os.listdir(path) if f.endswith(".buf")]
@@ -194,7 +257,7 @@ def import_collected(path:str):
             # for v, i, w in [(v, i, w) for v, [i0, w0] in enumerate(zip(indices, weights)) for i, w in zip(i0, w0) if i != 0]:
             for vid in range(len(vertex_data["weights"])):
                 for w, i in zip(vertex_data["weights"][vid], vertex_data["indices"][vid]):
-                    if i != 0:
+                    if w != 0:
                         obj.vertex_groups[i].add((vid,), w, 'REPLACE')
 
         for diffuse in [f for f in os.listdir(path) if str(ib_indexes[idx]) in f and f.endswith("png")]:
