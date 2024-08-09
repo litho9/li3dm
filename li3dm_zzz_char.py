@@ -13,28 +13,28 @@ def log(data):
 
 def prop(file:str, key:str): idx = file.index(key) + len(key) + 1; return file[idx:idx+8]
 
-def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir = "collected"):
+def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir="collected", root_vs="e8425f64cfb887cd", blend_vb="vb2"):
     os.chdir(path)
     in_dir = in_dir or glob("FrameAnalysis*")[-1]
     print(f"From folder: {in_dir} to folder {out_dir}...")
 
     vb0_files = glob(f"{in_dir}/*-vb0={vb}*.buf")
-    posed_files = [f for f in vb0_files if int(os.path.split(f)[-1][:6]) > 10]  # draw ids <10 are point lists
-    draw_id = [os.path.split(f)[-1][:6] for f in posed_files][0]
+    posed_file = [f for f in vb0_files][1]
+    draw_id = os.path.split(posed_file)[-1][:6]
+    print(f"draw_id={draw_id}")
     tex_file = glob(f"{in_dir}/{draw_id}-vb1=*.buf")[0]
     ib_file = glob(f"{in_dir}/{draw_id}-ib=*.buf")[0]
 
-    pos_file_size = os.path.getsize(posed_files[0])  # the matching pointlist has the same size
-    vs = "e8425f64cfb887cd"  # always this value
-    pointlist_vb0 = [f for f in glob(f"{in_dir}/*vb0*{vs}.buf") if os.path.getsize(f) == pos_file_size][0]
-    blend_file = glob(f"{in_dir}/{os.path.split(pointlist_vb0)[-1][:6]}-vb2=*.buf")[0]
+    pos_file_size = os.path.getsize(posed_file)  # the matching pointlist has the same size
+    pointlist_vb0 = [f for f in glob(f"{in_dir}/*vb0*{root_vs}.buf") if os.path.getsize(f) == pos_file_size][0]
+    blend_file = glob(f"{in_dir}/{os.path.split(pointlist_vb0)[-1][:6]}-{blend_vb}=*.buf")[0]
 
     for tex in [f for f in glob(f"{in_dir}/{draw_id}-ps-t*") if "!" not in f]:
         copyfile(tex, f"{out_dir}/{name}-{tex[42:53]}.{tex[-3:]}")
     copyfile(pointlist_vb0, f"{out_dir}/{name}-b0pos={prop(pointlist_vb0, 'vb0')}-draw={vb}.buf")
     copyfile(tex_file, f"{out_dir}/{name}-b1tex={prop(tex_file, 'vb1')}.buf")
     copyfile(ib_file, f"{out_dir}/{name}-b2ib={prop(ib_file, 'ib')}.buf")
-    copyfile(blend_file, f"{out_dir}/{name}-b3blend={prop(blend_file, 'vb2')}.buf")
+    copyfile(blend_file, f"{out_dir}/{name}-b3blend={prop(blend_file, blend_vb)}.buf")
 
 if __name__ == "__main__":
     start = time.time()
@@ -42,7 +42,25 @@ if __name__ == "__main__":
 
     # collect_zzz(path0, "SoukakuHair", "5432bbb8", "FrameAnalysis-2024-07-21-162646") # vertex_count=5924
     # collect_zzz(path0, "SoukakuBody", "ff00994d", "FrameAnalysis-2024-07-21-162646")
-    collect_zzz(path0, "SoukakuFace", "d06e95fd", "FrameAnalysis-2024-07-21-162646") # vertex_count=2165
+    # collect_zzz(path0, "SoukakuFace", "d06e95fd", "FrameAnalysis-2024-07-21-162646") # vertex_count=2165
+
+    collect_zzz(path0, "PiperHair", "da8a2564", "FrameAnalysis-2024-07-31-221208")
+    collect_zzz(path0, "PiperBody", "d28231af", "FrameAnalysis-2024-07-31-221208")
+    collect_zzz(path0, "PiperFace", "67362536", "FrameAnalysis-2024-07-31-221208")
+    # 1f0dbd2b PiperAxe 731ab501 9c1cfb7d
+
+    # collect_zzz(path0, "NpcGirl001Hair", "5b6ebc43", "FrameAnalysis-2024-07-25-192429")  # vertex count=3688
+    # collect_zzz(path0, "NpcWoman001Hair", "6bcbf1c3", "FrameAnalysis-2024-07-25-192429")
+    # collect_zzz(path0, "NpcSchoolgirl001Hair", "8c4b750e", "FrameAnalysis-2024-07-25-192429")
+
+    #collect_zzz(path0, "Avocaboo", "38e7e949", "FrameAnalysis-2024-07-27-180010")
+    #collect_zzz(path0, "AvocabooB", "b86a9738", "FrameAnalysis-2024-07-27-180010")
+
+    #path0 = "C:/Users/cyrog/Documents/create/mod/3dmigoto_dev"
+    #collect_zzz(path0, "ArabalikaBody", "f3e2d803", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b") # vertex_count=782
+    #collect_zzz(path0, "ArabalikaHair", "6ee36691", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
+    #collect_zzz(path0, "ArabalikaEars", "62a109a8", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
+    #collect_zzz(path0, "ArabalikaStaff", "e0da29d2", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
 
     print(f"Operation completed in {int((time.time()-start)*1000)}ms")
 
@@ -98,11 +116,11 @@ def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
             if w != 0:
                 obj.vertex_groups[i].add((vid,), w, 'REPLACE')
 
-    #    bpy.context.view_layer.objects.active = obj
-    #    bpy.ops.object.mode_set(mode='EDIT')
-    #    bpy.ops.mesh.select_all(action='SELECT')
-    #    bpy.ops.mesh.remove_doubles(threshold=.000001)
-    #    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
 
     for diffuse in glob(f"{path}/{name}*.png"):
         mat = bpy.data.materials.new(name=f"LynMaterial")

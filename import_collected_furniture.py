@@ -1,8 +1,8 @@
 import bpy, numpy, os
 from glob import glob
 
-def import_collected_furniture(path:str):
-    vb_file, ib_file = glob(f"{path}/*-b0pos*.buf")[0], glob(f"{path}/*-b2ib*.buf")[0]
+def import_collected_furniture(path:str, name:str="Furniture"):
+    vb_file, ib_file = glob(f"{path}/{name}-b0pos*.buf")[0], glob(f"{path}/{name}-b2ib*.buf")[0]
     with open(vb_file, "rb") as pos, open(ib_file, "rb") as ib:
         vertex_data = {"positions": [], "normals": [], "colors": [], "uv": []}
         for i in range(os.path.getsize(vb_file) // 10):
@@ -17,7 +17,7 @@ def import_collected_furniture(path:str):
         contents = numpy.frombuffer(ib.read(), numpy.uint16)
         faces = [list(reversed(contents[i*3:i*3+3])) for i in range(len(contents)//3)]
 
-        mesh = bpy.data.meshes.new("Furniture")
+        mesh = bpy.data.meshes.new(name)
         obj = bpy.data.objects.new(mesh.name, mesh)
         mesh.from_pydata(vertex_data["positions"], [], faces)
         bpy.context.scene.collection.objects.link(obj)

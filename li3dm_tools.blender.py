@@ -206,9 +206,9 @@ def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
         mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
 
-def import_collected(path:str):
-    files = [f for f in os.listdir(path) if f.endswith(".buf")]
-    pos, tex, ib, blend = [open(os.path.join(path, f), "rb") for f in files]
+def import_collected(path:str, name:str):
+    files = glob(f"{path}/{name}-b*.buf")
+    pos, tex, ib, blend = [open(f, "rb") for f in files]
     vertex_count = os.path.getsize(os.path.join(path, files[0])) // 40
     tex_stride = os.path.getsize(os.path.join(path, files[1])) // vertex_count  # either 12 or 20
     vertex_data = {"positions": [], "normals": [], "colors": [], "indices": [], "weights": [],
@@ -216,7 +216,7 @@ def import_collected(path:str):
     for i in range(vertex_count):
         [px, py, pz, nx, ny, nz] = [f32(pos) for _ in range(6)]
         vertex_data["positions"].append((-px, -pz, py))
-        vertex_data["normals"].append((nx, nz, -ny))
+        vertex_data["normals"].append((-nx, -nz, ny))
         pos.read(16)  # throw tangent info away, it will be recalculated on export
 
         [r, g, b, a] = numpy.frombuffer(tex.read(4), numpy.uint8)
@@ -231,15 +231,15 @@ def import_collected(path:str):
     contents = numpy.frombuffer(bytearray(ib.read()), numpy.uint16)
     for idx in range(len(ib_indexes) - 1):
         ib_section = contents[ib_indexes[idx]:ib_indexes[idx+1]]
-        faces = [ib_section[i*3:i*3+3] for i in range(len(ib_section)//3)]
+        faces = [list(reversed(ib_section[i*3:i*3+3])) for i in range(len(ib_section)//3)]
 
-        mesh = bpy.data.meshes.new(str(ib_indexes[idx]))
-        obj = bpy.data.objects.new(mesh.name, mesh)
+        mesh = bpy.data.meshes.new(name)
+        obj = bpy.data.objects.new(name, mesh)
         mesh.from_pydata(vertex_data["positions"], [], faces)
-        # bpy.data.collections[folder_name].objects.link(obj)
         bpy.context.scene.collection.objects.link(obj)
-        # obj.select_set(True)
-        # bpy.context.view_layer.objects.active = obj
+
+        mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
+        mesh.calc_normals_split()
         mesh.use_auto_smooth = True
         mesh.normals_split_custom_set_from_vertices(vertex_data["normals"])
 
