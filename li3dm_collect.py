@@ -29,7 +29,7 @@ def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir = "collected"):
 
 if __name__ == "__main__":
     start = time.time()
-    path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev"
+    path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev"
 
     # collect_zzz(path0, "SoukakuHair", "5432bbb8", "FrameAnalysis-2024-07-21-162646") # vertex_count=5924
     # collect_zzz(path0, "SoukakuBody", "ff00994d", "FrameAnalysis-2024-07-21-162646")

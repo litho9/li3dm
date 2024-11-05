@@ -26,7 +26,7 @@ def collect_furniture(path:str, name:str, vb:str):
 if __name__ == "__main__":
     start = time.time()
 
-    path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev"
+    path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev"
     collect_furniture(path0, "HIABox", "d4c6ca97")
 
     print(f"Operation completed in {int((time.time()-start)*1000)}ms")

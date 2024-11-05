@@ -15,7 +15,7 @@ def doodoo2():
     ugh = { "Face":0, "Head":1, "Body":2 }
     for obj in [o for o in objs if not o.name.startswith("Couch")]:
         log(f"processing {obj.name}...")
-        [char, part, *egh] = obj.name.split("_")
+        [char, part, *_egh] = obj.name.split("_")
         if part == "BodyN": obj["pivot_u"] = .75; obj["pivot_v"] = .5; obj["scale"] = .25; continue
         obj["pivot_u"] = (agh[char][0] + ugh[part]) * .125
         obj["pivot_v"] = agh[char][1] * .125
