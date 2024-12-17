@@ -19,7 +19,7 @@ def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir="collected", roo
     print(f"From folder: {in_dir} to folder {out_dir}...")
 
     vb0_files = glob(f"{in_dir}/*-vb0={vb}*.buf")
-    posed_file = [f for f in vb0_files][1]
+    posed_file = [f for f in vb0_files][0]
     draw_id = os.path.split(posed_file)[-1][:6]
     print(f"draw_id={draw_id}")
     tex_file = glob(f"{in_dir}/{draw_id}-vb1=*.buf")[0]
@@ -38,16 +38,30 @@ def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir="collected", roo
 
 if __name__ == "__main__":
     start = time.time()
-    path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev"
+    path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev"
 
     # collect_zzz(path0, "SoukakuHair", "5432bbb8", "FrameAnalysis-2024-07-21-162646") # vertex_count=5924
     # collect_zzz(path0, "SoukakuBody", "ff00994d", "FrameAnalysis-2024-07-21-162646")
     # collect_zzz(path0, "SoukakuFace", "d06e95fd", "FrameAnalysis-2024-07-21-162646") # vertex_count=2165
 
-    collect_zzz(path0, "PiperHair", "da8a2564", "FrameAnalysis-2024-07-31-221208")
-    collect_zzz(path0, "PiperBody", "d28231af", "FrameAnalysis-2024-07-31-221208")
-    collect_zzz(path0, "PiperFace", "67362536", "FrameAnalysis-2024-07-31-221208")
+    # collect_zzz(path0, "PiperHair", "da8a2564", "FrameAnalysis-2024-07-31-221208")
+    collect_zzz(path0, "PiperBody", "d28231af", "FrameAnalysis-2024-10-22-100552")
+    # collect_zzz(path0, "PiperFace", "67362536", "FrameAnalysis-2024-07-31-221208")
     # 1f0dbd2b PiperAxe 731ab501 9c1cfb7d
+
+    # collect_zzz(path0, "NekomataFace", "c719aab9", "FrameAnalysis-2024-08-12-142640") # 5cfcac2d 8972f558
+    # collect_zzz(path0, "NekomataHair", "a00df230", "FrameAnalysis-2024-08-12-142640") #f16498bf
+    # collect_zzz(path0, "NekomataBody", "0c01e6a5", "FrameAnalysis-2024-08-12-145047") # tex=b5a4c084
+    # collect_zzz(path0, "NekomataFace", "c719aab9", "FrameAnalysis-2024-08-12-142640") # 5cfcac2d 8972f558
+    # collect_zzz(path0, "NekomataHair", "a00df230", "FrameAnalysis-2024-08-12-142640") #f16498bf
+    # collect_zzz(path0, "NekomataBodyV1-1", "0c01e6a5", "FrameAnalysis-2024-08-14-083233") # 99132d05 is boots
+    # collect_zzz(path0, "NekomataBootsV1-1", "99132d05", "FrameAnalysis-2024-08-14-083233") # 99132d05 is boots
+
+    #collect_zzz(path0, "LucyBody", "da79199a", "FrameAnalysis-2024-08-25-084636")
+
+    # collect_zzz(path0, "JaneFace", "5661afc3", "FrameAnalysis-2024-08-14-111119")  # 5661afc3 91846a84 cbdb9506
+    # collect_zzz(path0, "JaneHair", "5721e4e7", "FrameAnalysis-2024-08-14-111119") # 0a10c747 5721e4e7 c8ad344e
+    #collect_zzz(path0, "JaneBody", "d1aa4b85", "FrameAnalysis-2024-08-14-111119") # 8b85c03e 9727a184 d1aa4b85
 
     # collect_zzz(path0, "NpcGirl001Hair", "5b6ebc43", "FrameAnalysis-2024-07-25-192429")  # vertex count=3688
     # collect_zzz(path0, "NpcWoman001Hair", "6bcbf1c3", "FrameAnalysis-2024-07-25-192429")
@@ -56,7 +70,7 @@ if __name__ == "__main__":
     #collect_zzz(path0, "Avocaboo", "38e7e949", "FrameAnalysis-2024-07-27-180010")
     #collect_zzz(path0, "AvocabooB", "b86a9738", "FrameAnalysis-2024-07-27-180010")
 
-    #path0 = "C:/Users/cyrog/Documents/create/mod/3dmigoto_dev"
+    #path0 = "C:/Users/urmom/Documents/create/mod/3dmigoto_dev"
     #collect_zzz(path0, "ArabalikaBody", "f3e2d803", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b") # vertex_count=782
     #collect_zzz(path0, "ArabalikaHair", "6ee36691", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
     #collect_zzz(path0, "ArabalikaEars", "62a109a8", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
@@ -127,7 +141,7 @@ def import_collected_zzz(path:str, name:str, tex_fns):
         tex_image.image = bpy.data.images.load(diffuse)
         mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
-path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev/collected"
+path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev/collected"
 #import_collected_zzz(path0, "SoukakuFace", [f32,f32,f32,f32])
 #import_collected_zzz(path0, "SoukakuHair")
 #import_collected_zzz(path0, "SoukakuBody")
