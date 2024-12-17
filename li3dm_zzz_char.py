@@ -65,11 +65,8 @@ if __name__ == "__main__":
     print(f"Operation completed in {int((time.time()-start)*1000)}ms")
 
 
-f16 = lambda buf: numpy.frombuffer(buf.read(2), numpy.float16)
-f32 = lambda buf: numpy.frombuffer(buf.read(4), numpy.float32)
-f64 = lambda buf: numpy.frombuffer(buf.read(8), numpy.float64)
-
-def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
+# import bpy, glob, os, numpy as np, itertools
+def import_collected_zzz(path:str, name:str, tex_fns):
     files = glob(f"{path}/{name}-b*.buf")
     pos, tex, ib, blend = [open(f, "rb") for f in files]
     vertex_count = os.path.getsize(os.path.join(path, files[0])) // 40
@@ -81,10 +78,9 @@ def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
         normals.append((-nx, ny, nz))
         pos.read(16)  # throw tangent info away, it will be recalculated on export
 
-        [r, g, b, a] = numpy.frombuffer(tex.read(4), numpy.uint8)
-        colors.append((r, g, b, a))
-        for j, tex_fn in enumerate(tex_fns):
-            uvs[j].append([tex_fn(tex), 1 - tex_fn(tex)])
+        colors.append(np.frombuffer(tex.read(4), np.uint8))
+        for j, fmt in enumerate(tex_fns):
+            uvs[j].append(np.frombuffer(tex.read(np.dtype(fmt).itemsize * 2), fmt))
 
         weights.append(numpy.frombuffer(blend.read(16), numpy.float32))
         indices.append(numpy.frombuffer(blend.read(16), numpy.int32))
@@ -102,11 +98,11 @@ def import_collected_zzz(path:str, name:str, tex_fns=(f16,f32,f16)):
     mesh.use_auto_smooth = True
     mesh.normals_split_custom_set_from_vertices(normals)
 
-    color_layer = mesh.vertex_colors.new(name='Color')
+    color_layer = mesh.vertex_colors.new()
     for l in mesh.loops:
         color_layer.data[l.index].color = colors[l.vertex_index]
-    for i, uv in enumerate(uvs):
-        uv_layer = mesh.uv_layers.new(name=f"TEXCOORD{i}")
+    for uv in uvs:
+        uv_layer = mesh.uv_layers.new()
         for l in mesh.loops:
             uv_layer.data[l.index].uv = uv[l.vertex_index]
     for i in range(max(itertools.chain(*indices)) + 1):
@@ -135,6 +131,7 @@ path0 = "C:/Users/cyrog/Documents/create/mod/zzz/3dmigoto_dev/collected"
 #import_collected_zzz(path0, "SoukakuFace", [f32,f32,f32,f32])
 #import_collected_zzz(path0, "SoukakuHair")
 #import_collected_zzz(path0, "SoukakuBody")
+import_collected_zzz(path0, "LucyCloth", (np.float16, np.float32, np.float16))
 
 def export_zzz_char(path, name, text_fns=(numpy.float16, numpy.float32, numpy.float16)):
     with open(f"{path}/{name}Position.li.buf", "wb") as bufPos, \
@@ -166,7 +163,7 @@ def export_zzz_char(path, name, text_fns=(numpy.float16, numpy.float32, numpy.fl
                     arr += [-tan[0], -tan[1], tan[2], loop.bitangent_sign]
                     bufPos.write(numpy.fromiter(arr, numpy.float32))  # 32 bits each
 
-                    c = numpy.fromiter(color[loop.vertex_index].color, numpy.float32)
+                    c = numpy.fromiter(color[loop.index].color, numpy.float32)
                     bufTex.write(numpy.around(c * 255.0).astype(numpy.uint8))
                     for i, uv in enumerate([tex.data[loop.index].uv for tex in obj.data.uv_layers]):
                         bufTex.write(numpy.fromiter([uv[0], 1 - uv[1]], text_fns[i]))
