@@ -1,4 +1,4 @@
-import bpy, bmesh, numpy, itertools, os, time
+import bpy, bmesh, numpy as np, itertools, os, time
 from glob import glob
 from shutil import copyfile
 
@@ -80,38 +80,36 @@ if __name__ == "__main__":
 
 
 # import bpy, glob, os, numpy as np, itertools
-def import_collected_zzz(path:str, name:str, tex_fns):
-    files = glob(f"{path}/{name}-b*.buf")
-    pos, tex, ib, blend = [open(f, "rb") for f in files]
-    vertex_count = os.path.getsize(os.path.join(path, files[0])) // 40
-    positions, normals, colors, indices, weights = [], [], [], [], []
-    uvs = [[] for _ in range(len(tex_fns))]
+def import_char_from_zzz_analysis(vb1_hash:str, name:str, tex_fns=(np.float16, np.float32, np.float16)):
+    vb1_files = glob(f"*vb1={vb1_hash}*.buf")
+    draw = vb1_files[0][:6]
+    vb0_file = glob(f"{draw}-vb0=*.buf")[0]
+    vertex_count = os.path.getsize(vb0_file) // 40
+    vb0 = open(vb0_file, "rb")  # position, normals, tangent
+    positions, normals = [], []
     for i in range(vertex_count):
-        [px, py, pz, nx, ny, nz] = numpy.frombuffer(pos.read(24), numpy.float32)
+        [px, py, pz, nx, ny, nz] = np.frombuffer(vb0.read(24), np.float32)
         positions.append((-px, py, pz))
         normals.append((-nx, ny, nz))
-        pos.read(16)  # throw tangent info away, it will be recalculated on export
+        vb0.read(16)  # throw tangent info away, it will be recalculated on export
 
-        colors.append(np.frombuffer(tex.read(4), np.uint8))
-        for j, fmt in enumerate(tex_fns):
-            uvs[j].append(np.frombuffer(tex.read(np.dtype(fmt).itemsize * 2), fmt))
-
-        weights.append(numpy.frombuffer(blend.read(16), numpy.float32))
-        indices.append(numpy.frombuffer(blend.read(16), numpy.int32))
-
-    ib_section = numpy.frombuffer(bytearray(ib.read()), numpy.uint16)
+    ib = open(glob(f"{vb1_files[1][:6]}-ib=*.buf")[0], "rb")
+    ib_section = np.frombuffer(bytearray(ib.read()), np.uint16)
     faces = [list(reversed(ib_section[i*3:i*3+3])) for i in range(len(ib_section)//3)]
 
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(name, mesh)
-    mesh.from_pydata(positions, [], faces)
     bpy.context.scene.collection.objects.link(obj)
-
-    mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
-    mesh.calc_normals_split()
+    mesh.from_pydata(positions, [], faces)
     mesh.use_auto_smooth = True
     mesh.normals_split_custom_set_from_vertices(normals)
 
+    colors, uvs = [], [[] for _ in range(len(tex_fns))]
+    vb1 = open(glob(f"{draw}-vb1=*.buf")[0], "rb")  # vertex color, texture maps
+    for i in range(vertex_count):
+        colors.append(np.frombuffer(vb1.read(4), np.uint8))
+        for j, fmt in enumerate(tex_fns):
+            uvs[j].append(np.frombuffer(vb1.read(np.dtype(fmt).itemsize * 2), fmt))
     color_layer = mesh.vertex_colors.new()
     for l in mesh.loops:
         color_layer.data[l.index].color = colors[l.vertex_index]
@@ -119,6 +117,11 @@ def import_collected_zzz(path:str, name:str, tex_fns):
         uv_layer = mesh.uv_layers.new()
         for l in mesh.loops:
             uv_layer.data[l.index].uv = uv[l.vertex_index]
+
+    vb2, weights, indices = open(glob(f"{draw}-vb2=*.buf")[0], "rb"), [], []
+    for a in range(vertex_count):
+        weights.append(np.frombuffer(vb2.read(16), np.float32))
+        indices.append(np.frombuffer(vb2.read(16), np.int32))
     for i in range(max(itertools.chain(*indices)) + 1):
         obj.vertex_groups.new(name=str(i))
     for vid in range(len(weights)):
@@ -132,7 +135,7 @@ def import_collected_zzz(path:str, name:str, tex_fns):
     bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    for diffuse in glob(f"{path}/{name}*.png"):
+    for diffuse in glob(f"{name}*.png"):
         mat = bpy.data.materials.new(name=f"LynMaterial")
         obj.data.materials.append(mat)
         mat.use_nodes = True
@@ -147,46 +150,51 @@ path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev/collected"
 #import_collected_zzz(path0, "SoukakuBody")
 import_collected_zzz(path0, "LucyCloth", (np.float16, np.float32, np.float16))
 
-def export_zzz_char(path, name, text_fns=(numpy.float16, numpy.float32, numpy.float16)):
-    with open(f"{path}/{name}Position.li.buf", "wb") as bufPos, \
-            open(f"{path}/{name}Blend.li.buf", "wb") as bufBlend, \
-            open(f"{path}/{name}Texcoord.li.buf", "wb") as bufTex:
-        offset = 0
-        for obj in sorted(bpy.context.selected_objects, key=lambda x: x.name):  # list selected objects by index
-            # log(f"processing object {obj.name}. there are {len(obj.data.loops)} loops...")
-            obj.data.calc_tangents()
-            color = obj.data.vertex_colors[0].data
-            with open(f"{path}/{name}-{obj.name.split('.')[0]}.li.ib", "wb") as ib:
-                index_map = {}
-                idx = 0
-                for loop in obj.data.loops:
-                    co = obj.data.vertices[loop.vertex_index].co
-                    [u, v] = obj.data.uv_layers[0].data[loop.index].uv
-                    nor = numpy.fromiter(loop.normal, numpy.float32)
-                    tan = numpy.fromiter(loop.tangent, numpy.float32)
 
-                    h = (loop.vertex_index, u, v, nor[0], nor[1], nor[2])
-                    if h in index_map:
-                        ib.write(numpy.uint32(index_map[h] + offset))
-                        continue
-                    index_map[h] = idx
-                    ib.write(numpy.uint32(idx + offset))  # ib.write(numpy.uint32(index_map[h]))
-                    idx += 1
+# noinspection PyTypeChecker
+def export_zzz_char(name, obj, text_fns=(np.float16, np.float32, np.float16)):
+    with open(f"{name}-vb0.buf", "wb") as vb0, \
+            open(f"{name}-vb1.buf", "wb") as vb1, \
+            open(f"{name}-ib.buf", "wb") as ib, \
+            open(f"{name}-vb2.buf", "wb") as vb2:
+        # log(f"processing object {obj.name}. there are {len(obj.data.loops)} loops...")
+        obj.data.calc_tangents()
+        color = obj.data.vertex_colors[0].data
+        obj.data.calc_normals_split()
+        index_map = {}
+        idx = 0
+        for loop in [obj.data.loops[i+2-i%3*2] for i in range(len(obj.data.loops))]:
+            co = obj.data.vertices[loop.vertex_index].co
+            [u, v] = obj.data.uv_layers[0].data[loop.index].uv
+            nor = np.fromiter(loop.normal, np.float32)
+            tan = np.fromiter(loop.tangent, np.float32)
 
-                    arr = [-co.x, co.y, co.z, nor[0], -nor[1], nor[2]]
-                    arr += [-tan[0], -tan[1], tan[2], loop.bitangent_sign]
-                    bufPos.write(numpy.fromiter(arr, numpy.float32))  # 32 bits each
+            h = (loop.vertex_index, u, v, nor[0], nor[1], nor[2])
+            if h in index_map:
+                ib.write(np.uint32(index_map[h]))
+                continue
+            index_map[h] = idx
+            ib.write(np.uint32(idx))  # ib.write(np.uint32(index_map[h]))
+            idx += 1
 
-                    c = numpy.fromiter(color[loop.index].color, numpy.float32)
-                    bufTex.write(numpy.around(c * 255.0).astype(numpy.uint8))
-                    for i, uv in enumerate([tex.data[loop.index].uv for tex in obj.data.uv_layers]):
-                        bufTex.write(numpy.fromiter([uv[0], 1 - uv[1]], text_fns[i]))
+            arr = [-co.x, co.y, co.z, -nor[0], nor[1], nor[2]]
+            arr += [tan[0], tan[2], tan[1], loop.bitangent_sign]
+            vb0.write(np.fromiter(arr, np.float32))  # 32 bits each
 
-                    g = obj.data.vertices[loop.vertex_index].groups
-                    weight = [g[i].weight if i < len(g) else .0 for i in range(4)]
-                    index = [g[i].group if i < len(g) else 0 for i in range(4)]
-                    bufBlend.write(numpy.fromiter(weight, numpy.float32))
-                    bufBlend.write(numpy.fromiter(index, numpy.int32))
+            # c = np.fromiter(color[loop.index].color[:3] + (0,), np.float32)
+            c = np.fromiter(color[loop.index].color, np.float32)
+            vb1.write(np.around(c * 255.0).astype(np.uint8))
+            for i, uv in enumerate([tex.data[loop.index].uv for tex in obj.data.uv_layers]):
+                vb1.write(np.fromiter([uv[0], uv[1]], text_fns[i]))
 
-                offset += idx + 1
-                log(f"drawindexed = {idx}")
+            g = obj.data.vertices[loop.vertex_index].groups
+            weight = [g[i].weight if i < len(g) else .0 for i in range(4)]
+            index = [g[i].group if i < len(g) else 0 for i in range(4)]
+            vb2.write(np.fromiter(weight, np.float32))
+            vb2.write(np.fromiter(index, np.int32))
+
+        print(f"drawindexed = {idx}")
+
+os.chdir(r"C:\mod\downloads")
+obj0 = bpy.context.selected_objects[0]
+export_zzz_char("EllenHead", obj0)
