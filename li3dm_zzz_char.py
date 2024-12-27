@@ -1,5 +1,4 @@
-import bpy, bmesh, numpy as np, itertools, os, time
-from glob import glob
+import bpy, bmesh, numpy as np, os, time; from glob import glob
 from shutil import copyfile
 
 def log(data):
@@ -78,56 +77,38 @@ if __name__ == "__main__":
 
     print(f"Operation completed in {int((time.time()-start)*1000)}ms")
 
+def inv(vv): return -vv[0], vv[1], vv[2]
 
 # import bpy, glob, os, numpy as np, itertools
-def import_char_from_zzz_analysis(vb1_hash:str, name:str, tex_fns=(np.float16, np.float32, np.float16)):
+# noinspection PyTypeChecker
+def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f2"):
     vb1_files = glob(f"*vb1={vb1_hash}*.buf")
     draw = vb1_files[0][:6]
-    vb0_file = glob(f"{draw}-vb0=*.buf")[0]
-    vertex_count = os.path.getsize(vb0_file) // 40
-    vb0 = open(vb0_file, "rb")  # position, normals, tangent
-    positions, normals = [], []
-    for i in range(vertex_count):
-        [px, py, pz, nx, ny, nz] = np.frombuffer(vb0.read(24), np.float32)
-        positions.append((-px, py, pz))
-        normals.append((-nx, ny, nz))
-        vb0.read(16)  # throw tangent info away, it will be recalculated on export
-
-    ib = open(glob(f"{vb1_files[1][:6]}-ib=*.buf")[0], "rb")
-    ib_section = np.frombuffer(bytearray(ib.read()), np.uint16)
-    faces = [list(reversed(ib_section[i*3:i*3+3])) for i in range(len(ib_section)//3)]
-
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
-    mesh.from_pydata(positions, [], faces)
-    mesh.use_auto_smooth = True
-    mesh.normals_split_custom_set_from_vertices(normals)
 
-    colors, uvs = [], [[] for _ in range(len(tex_fns))]
-    vb1 = open(glob(f"{draw}-vb1=*.buf")[0], "rb")  # vertex color, texture maps
-    for i in range(vertex_count):
-        colors.append(np.frombuffer(vb1.read(4), np.uint8))
-        for j, fmt in enumerate(tex_fns):
-            uvs[j].append(np.frombuffer(vb1.read(np.dtype(fmt).itemsize * 2), fmt))
+    vb0 = np.fromfile(glob(f"{draw}-vb0=*.buf")[0], np.dtype("3f,3f,4f"))
+    ib = np.fromfile(glob(f"{vb1_files[1][:6]}-ib=*.buf")[0], np.dtype("3u2"))
+    mesh.from_pydata([inv(p[0]) for p in vb0], [], [list(reversed(p)) for p in ib])
+    mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
+    mesh.normals_split_custom_set_from_vertices([inv(p[1]) for p in vb0])
+
+    vb1 = np.fromfile(glob(f"{draw}-vb1=*.buf")[0], np.dtype(vb1_fmt))
     color_layer = mesh.vertex_colors.new()
+    for _ in range(len(vb1[0])-1):
+        mesh.uv_layers.new()
     for l in mesh.loops:
-        color_layer.data[l.index].color = colors[l.vertex_index]
-    for uv in uvs:
-        uv_layer = mesh.uv_layers.new()
-        for l in mesh.loops:
-            uv_layer.data[l.index].uv = uv[l.vertex_index]
+        color_layer.data[l.index].color = vb1[l.vertex_index][0]
+        for i, uv_layer in enumerate(mesh.uv_layers):
+            uv_layer.data[l.index].uv = vb1[l.vertex_index][i+1]
 
-    vb2, weights, indices = open(glob(f"{draw}-vb2=*.buf")[0], "rb"), [], []
-    for a in range(vertex_count):
-        weights.append(np.frombuffer(vb2.read(16), np.float32))
-        indices.append(np.frombuffer(vb2.read(16), np.int32))
-    for i in range(max(itertools.chain(*indices)) + 1):
+    bld = np.fromfile(glob(f"{draw}-vb2=*.buf")[0], np.dtype("4f, 4i"))
+    c = [(v, w, i) for v in range(len(bld)) for w, i in zip(bld[v][0], bld[v][1]) if w != 0]
+    for i in range(max([x[2] for x in c]) + 1):
         obj.vertex_groups.new(name=str(i))
-    for vid in range(len(weights)):
-        for w, i in zip(weights[vid], indices[vid]):
-            if w != 0:
-                obj.vertex_groups[i].add((vid,), w, 'REPLACE')
+    for v, w, i in c:
+        obj.vertex_groups[i].add((v,), w, 'REPLACE')
 
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
@@ -160,16 +141,12 @@ def export_zzz_char(name, obj, text_fns=(np.float16, np.float32, np.float16)):
         # log(f"processing object {obj.name}. there are {len(obj.data.loops)} loops...")
         obj.data.calc_tangents()
         color = obj.data.vertex_colors[0].data
-        obj.data.calc_normals_split()
         index_map = {}
         idx = 0
         for loop in [obj.data.loops[i+2-i%3*2] for i in range(len(obj.data.loops))]:
-            co = obj.data.vertices[loop.vertex_index].co
             [u, v] = obj.data.uv_layers[0].data[loop.index].uv
-            nor = np.fromiter(loop.normal, np.float32)
-            tan = np.fromiter(loop.tangent, np.float32)
-
-            h = (loop.vertex_index, u, v, nor[0], nor[1], nor[2])
+            nor = inv(loop.normal)
+            h = (loop.vertex_index, u, v) + nor
             if h in index_map:
                 ib.write(np.uint32(index_map[h]))
                 continue
@@ -177,11 +154,9 @@ def export_zzz_char(name, obj, text_fns=(np.float16, np.float32, np.float16)):
             ib.write(np.uint32(idx))  # ib.write(np.uint32(index_map[h]))
             idx += 1
 
-            arr = [-co.x, co.y, co.z, -nor[0], nor[1], nor[2]]
-            arr += [tan[0], tan[2], tan[1], loop.bitangent_sign]
-            vb0.write(np.fromiter(arr, np.float32))  # 32 bits each
+            co = inv(obj.data.vertices[loop.vertex_index].co)
+            vb0.write(np.fromiter(co + nor + inv(loop.tangent) + (-loop.bitangent_sign,), np.float32))
 
-            # c = np.fromiter(color[loop.index].color[:3] + (0,), np.float32)
             c = np.fromiter(color[loop.index].color, np.float32)
             vb1.write(np.around(c * 255.0).astype(np.uint8))
             for i, uv in enumerate([tex.data[loop.index].uv for tex in obj.data.uv_layers]):
