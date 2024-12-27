@@ -1,86 +1,8 @@
-import bpy, bmesh, numpy as np, os, time; from glob import glob
-from shutil import copyfile
-
-def log(data):
-    for window in bpy.context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
-            if area.type == 'CONSOLE':
-                override = {'window': window, 'screen': screen, 'area': area}
-                bpy.ops.console.scrollback_append(override, text=str(data), type="OUTPUT")
-
-
-def prop(file:str, key:str): idx = file.index(key) + len(key) + 1; return file[idx:idx+8]
-
-def collect_zzz(path:str, name:str, vb:str, in_dir:str, out_dir="collected", root_vs="e8425f64cfb887cd", blend_vb="vb2"):
-    os.chdir(path)
-    in_dir = in_dir or glob("FrameAnalysis*")[-1]
-    print(f"From folder: {in_dir} to folder {out_dir}...")
-
-    vb0_files = glob(f"{in_dir}/*-vb0={vb}*.buf")
-    posed_file = [f for f in vb0_files][0]
-    draw_id = os.path.split(posed_file)[-1][:6]
-    print(f"draw_id={draw_id}")
-    tex_file = glob(f"{in_dir}/{draw_id}-vb1=*.buf")[0]
-    ib_file = glob(f"{in_dir}/{draw_id}-ib=*.buf")[0]
-
-    pos_file_size = os.path.getsize(posed_file)  # the matching pointlist has the same size
-    pointlist_vb0 = [f for f in glob(f"{in_dir}/*vb0*{root_vs}.buf") if os.path.getsize(f) == pos_file_size][0]
-    blend_file = glob(f"{in_dir}/{os.path.split(pointlist_vb0)[-1][:6]}-{blend_vb}=*.buf")[0]
-
-    for tex in [f for f in glob(f"{in_dir}/{draw_id}-ps-t*") if "!" not in f]:
-        copyfile(tex, f"{out_dir}/{name}-{tex[42:53]}.{tex[-3:]}")
-    copyfile(pointlist_vb0, f"{out_dir}/{name}-b0pos={prop(pointlist_vb0, 'vb0')}-draw={vb}.buf")
-    copyfile(tex_file, f"{out_dir}/{name}-b1tex={prop(tex_file, 'vb1')}.buf")
-    copyfile(ib_file, f"{out_dir}/{name}-b2ib={prop(ib_file, 'ib')}.buf")
-    copyfile(blend_file, f"{out_dir}/{name}-b3blend={prop(blend_file, blend_vb)}.buf")
-
-if __name__ == "__main__":
-    start = time.time()
-    path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev"
-
-    # collect_zzz(path0, "SoukakuHair", "5432bbb8", "FrameAnalysis-2024-07-21-162646") # vertex_count=5924
-    # collect_zzz(path0, "SoukakuBody", "ff00994d", "FrameAnalysis-2024-07-21-162646")
-    # collect_zzz(path0, "SoukakuFace", "d06e95fd", "FrameAnalysis-2024-07-21-162646") # vertex_count=2165
-
-    # collect_zzz(path0, "PiperHair", "da8a2564", "FrameAnalysis-2024-07-31-221208")
-    collect_zzz(path0, "PiperBody", "d28231af", "FrameAnalysis-2024-10-22-100552")
-    # collect_zzz(path0, "PiperFace", "67362536", "FrameAnalysis-2024-07-31-221208")
-    # 1f0dbd2b PiperAxe 731ab501 9c1cfb7d
-
-    # collect_zzz(path0, "NekomataFace", "c719aab9", "FrameAnalysis-2024-08-12-142640") # 5cfcac2d 8972f558
-    # collect_zzz(path0, "NekomataHair", "a00df230", "FrameAnalysis-2024-08-12-142640") #f16498bf
-    # collect_zzz(path0, "NekomataBody", "0c01e6a5", "FrameAnalysis-2024-08-12-145047") # tex=b5a4c084
-    # collect_zzz(path0, "NekomataFace", "c719aab9", "FrameAnalysis-2024-08-12-142640") # 5cfcac2d 8972f558
-    # collect_zzz(path0, "NekomataHair", "a00df230", "FrameAnalysis-2024-08-12-142640") #f16498bf
-    # collect_zzz(path0, "NekomataBodyV1-1", "0c01e6a5", "FrameAnalysis-2024-08-14-083233") # 99132d05 is boots
-    # collect_zzz(path0, "NekomataBootsV1-1", "99132d05", "FrameAnalysis-2024-08-14-083233") # 99132d05 is boots
-
-    #collect_zzz(path0, "LucyBody", "da79199a", "FrameAnalysis-2024-08-25-084636")
-
-    # collect_zzz(path0, "JaneFace", "5661afc3", "FrameAnalysis-2024-08-14-111119")  # 5661afc3 91846a84 cbdb9506
-    # collect_zzz(path0, "JaneHair", "5721e4e7", "FrameAnalysis-2024-08-14-111119") # 0a10c747 5721e4e7 c8ad344e
-    #collect_zzz(path0, "JaneBody", "d1aa4b85", "FrameAnalysis-2024-08-14-111119") # 8b85c03e 9727a184 d1aa4b85
-
-    # collect_zzz(path0, "NpcGirl001Hair", "5b6ebc43", "FrameAnalysis-2024-07-25-192429")  # vertex count=3688
-    # collect_zzz(path0, "NpcWoman001Hair", "6bcbf1c3", "FrameAnalysis-2024-07-25-192429")
-    # collect_zzz(path0, "NpcSchoolgirl001Hair", "8c4b750e", "FrameAnalysis-2024-07-25-192429")
-
-    #collect_zzz(path0, "Avocaboo", "38e7e949", "FrameAnalysis-2024-07-27-180010")
-    #collect_zzz(path0, "AvocabooB", "b86a9738", "FrameAnalysis-2024-07-27-180010")
-
-    #path0 = "C:/Users/urmom/Documents/create/mod/3dmigoto_dev"
-    #collect_zzz(path0, "ArabalikaBody", "f3e2d803", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b") # vertex_count=782
-    #collect_zzz(path0, "ArabalikaHair", "6ee36691", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
-    #collect_zzz(path0, "ArabalikaEars", "62a109a8", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
-    #collect_zzz(path0, "ArabalikaStaff", "e0da29d2", "FrameAnalysis-2024-07-27-181520", root_vs="653c63ba4a73ca8b")
-
-    print(f"Operation completed in {int((time.time()-start)*1000)}ms")
+import bpy, numpy as np, os
+from glob import glob
 
 def inv(vv): return -vv[0], vv[1], vv[2]
 
-# import bpy, glob, os, numpy as np, itertools
-# noinspection PyTypeChecker
 def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f2"):
     vb1_files = glob(f"*vb1={vb1_hash}*.buf")
     draw = vb1_files[0][:6]
@@ -99,7 +21,7 @@ def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f
     for _ in range(len(vb1[0])-1):
         mesh.uv_layers.new()
     for l in mesh.loops:
-        color_layer.data[l.index].color = vb1[l.vertex_index][0]
+        color_layer.data[l.index].color = [c/256 for c in vb1[l.vertex_index][0]]
         for i, uv_layer in enumerate(mesh.uv_layers):
             uv_layer.data[l.index].uv = vb1[l.vertex_index][i+1]
 
@@ -125,51 +47,36 @@ def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f
         tex_image.image = bpy.data.images.load(diffuse)
         mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
-path0 = "C:/Users/urmom/Documents/create/mod/zzz/3dmigoto_dev/collected"
-#import_collected_zzz(path0, "SoukakuFace", [f32,f32,f32,f32])
-#import_collected_zzz(path0, "SoukakuHair")
-#import_collected_zzz(path0, "SoukakuBody")
-import_collected_zzz(path0, "LucyCloth", (np.float16, np.float32, np.float16))
-
-
 # noinspection PyTypeChecker
-def export_zzz_char(name, obj, text_fns=(np.float16, np.float32, np.float16)):
-    with open(f"{name}-vb0.buf", "wb") as vb0, \
-            open(f"{name}-vb1.buf", "wb") as vb1, \
-            open(f"{name}-ib.buf", "wb") as ib, \
-            open(f"{name}-vb2.buf", "wb") as vb2:
-        # log(f"processing object {obj.name}. there are {len(obj.data.loops)} loops...")
-        obj.data.calc_tangents()
-        color = obj.data.vertex_colors[0].data
-        index_map = {}
-        idx = 0
-        for loop in [obj.data.loops[i+2-i%3*2] for i in range(len(obj.data.loops))]:
-            [u, v] = obj.data.uv_layers[0].data[loop.index].uv
-            nor = inv(loop.normal)
-            h = (loop.vertex_index, u, v) + nor
-            if h in index_map:
-                ib.write(np.uint32(index_map[h]))
-                continue
-            index_map[h] = idx
-            ib.write(np.uint32(idx))  # ib.write(np.uint32(index_map[h]))
-            idx += 1
+def export_zzz_char(name, obj, vb1_fmt="4u1,2f2,2f,2f2"):
+    agh, index_map, idx = [], {}, 0
+    for loop in [obj.data.loops[i+2-i%3*2] for i in range(len(obj.data.loops))]:
+        h = (loop.vertex_index, *obj.data.uv_layers[0].data[loop.index].uv, *loop.normal)
+        b = h not in index_map
+        if b: index_map[h] = idx; idx += 1  # stoopid python has no 'idx++' syntax
+        vert = obj.data.vertices[loop.vertex_index] if b else None
+        agh.append((loop, index_map[h], vert))
+    print(f"drawindexed = {idx}")
 
-            co = inv(obj.data.vertices[loop.vertex_index].co)
-            vb0.write(np.fromiter(co + nor + inv(loop.tangent) + (-loop.bitangent_sign,), np.float32))
+    np.fromiter([a[1] for a in agh], np.uint16).tofile(f"{name}-ib.buf")
 
-            c = np.fromiter(color[loop.index].color, np.float32)
-            vb1.write(np.around(c * 255.0).astype(np.uint8))
-            for i, uv in enumerate([tex.data[loop.index].uv for tex in obj.data.uv_layers]):
-                vb1.write(np.fromiter([uv[0], uv[1]], text_fns[i]))
+    obj.data.calc_tangents()
+    agh2 = [(l, v) for l, _, v in agh if v]
+    a = [(inv(v.co), inv(l.normal), inv(l.tangent), -l.bitangent_sign) for l, v in agh2]
+    np.fromiter(a, np.dtype("3f,3f,3f,f")).tofile(f"{name}-vb0.buf")
 
-            g = obj.data.vertices[loop.vertex_index].groups
-            weight = [g[i].weight if i < len(g) else .0 for i in range(4)]
-            index = [g[i].group if i < len(g) else 0 for i in range(4)]
-            vb2.write(np.fromiter(weight, np.float32))
-            vb2.write(np.fromiter(index, np.int32))
+    color = obj.data.vertex_colors[0].data
+    t = [([int(i * 256) for i in color[l.index].color],
+         *[tex.data[l.index].uv for tex in obj.data.uv_layers]) for l, _ in agh2]
+    np.fromiter(t, np.dtype(vb1_fmt)).tofile(f"{name}-vb1.buf")
 
-        print(f"drawindexed = {idx}")
+    r = [([v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)],
+          [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]) for l, v in agh2]
+    np.fromiter(r, np.dtype("4f, 4i")).tofile(f"{name}-vb2.buf")
 
-os.chdir(r"C:\mod\downloads")
+os.chdir(r"C:\mod\zzmi\FrameAnalysis-2024-12-25-094405")  # ellen
+import_char_from_zzz_analysis("5ac6d5ee", "EllenBody", "4u1,2f2,2f,2f2,2f2")
+
+os.chdir(r"C:\mod\zzmi\Mods\EllenMod")
 obj0 = bpy.context.selected_objects[0]
-export_zzz_char("EllenHead", obj0)
+export_zzz_char("EllenBody", obj0, "4u1,2f2,2f,2f2,2f2")
