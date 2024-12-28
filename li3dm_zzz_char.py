@@ -2,6 +2,7 @@ import bpy, numpy as np, os
 from glob import glob
 
 def inv(vv): return -vv[0], vv[1], vv[2]
+
 def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     vb1_files = glob(f"*vb1={vb1_hash}*.buf")
     draw, draw2 = vb1_files[0][:6], vb1_files[1][:6]
@@ -16,13 +17,10 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     mesh.normals_split_custom_set_from_vertices([inv(p[1]) for p in vb0])
 
     vb1 = np.fromfile(glob(f"{draw}-vb1=*.buf")[0], np.dtype(vb1_fmt))
-    color_layer = mesh.vertex_colors.new()
-    for _ in range(len(vb1[0])-1):
-        mesh.uv_layers.new()
-    for l in mesh.loops:
-        color_layer.data[l.index].color = [c/256 for c in vb1[l.vertex_index][0]]
-        for i, uv_layer in enumerate(mesh.uv_layers):
-            uv_layer.data[l.index].uv = vb1[l.vertex_index][i+1]
+    data = [vb1[l.vertex_index] for l in mesh.loops]
+    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[0] / 256])
+    for i in range(1, len(vb1[0])):
+        mesh.uv_layers.new().data.foreach_set("uv", [c for d in data for c in d[i]])
 
     bld = np.fromfile(glob(f"{draw}-vb2=*.buf")[0], np.dtype("4f, 4i"))
     c = [(v, w, i) for v in range(len(bld)) for w, i in zip(bld[v][0], bld[v][1]) if w != 0]
