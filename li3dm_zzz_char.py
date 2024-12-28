@@ -2,16 +2,15 @@ import bpy, numpy as np, os
 from glob import glob
 
 def inv(vv): return -vv[0], vv[1], vv[2]
-
-def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f2"):
+def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     vb1_files = glob(f"*vb1={vb1_hash}*.buf")
-    draw = vb1_files[0][:6]
+    draw, draw2 = vb1_files[0][:6], vb1_files[1][:6]
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
 
     vb0 = np.fromfile(glob(f"{draw}-vb0=*.buf")[0], np.dtype("3f,3f,4f"))
-    ib = np.fromfile(glob(f"{vb1_files[1][:6]}-ib=*.buf")[0], np.dtype("3u2"))
+    ib = np.fromfile(glob(f"{draw2}-ib=*.buf")[0], np.dtype("3u2"))
     mesh.from_pydata([inv(p[0]) for p in vb0], [], [list(reversed(p)) for p in ib])
     mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
     mesh.normals_split_custom_set_from_vertices([inv(p[1]) for p in vb0])
@@ -48,35 +47,34 @@ def import_char_from_zzz_analysis(vb1_hash:str, name:str, vb1_fmt="4u1,2f2,2f,2f
         mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
 # noinspection PyTypeChecker
-def export_zzz_char(name, obj, vb1_fmt="4u1,2f2,2f,2f2"):
-    agh, index_map, idx = [], {}, 0
-    for loop in [obj.data.loops[i+2-i%3*2] for i in range(len(obj.data.loops))]:
-        h = (loop.vertex_index, *obj.data.uv_layers[0].data[loop.index].uv, *loop.normal)
-        b = h not in index_map
-        if b: index_map[h] = idx; idx += 1  # stoopid python has no 'idx++' syntax
-        vert = obj.data.vertices[loop.vertex_index] if b else None
-        agh.append((loop, index_map[h], vert))
+def zzz_char_export(name, mesh, vb1_fmt="4u1,2f2,2f,2f2"):
+    index_buffer, loop_buffer, index_map, idx = [], [], {}, 0
+    for loop in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
+        h = (loop.vertex_index, *mesh.uv_layers[0].data[loop.index].uv, *loop.normal)
+        if h not in index_map:
+            index_map[h] = idx; idx += 1  # stoopid python has no 'idx++' syntax
+            loop_buffer.append((loop, mesh.vertices[loop.vertex_index]))
+        index_buffer.append(index_map[h])
     print(f"drawindexed = {idx}")
 
-    np.fromiter([a[1] for a in agh], np.uint16).tofile(f"{name}-ib.buf")
+    np.fromiter(index_buffer, np.uint16).tofile(f"{name}-ib.buf")
 
-    obj.data.calc_tangents()
-    agh2 = [(l, v) for l, _, v in agh if v]
-    a = [(inv(v.co), inv(l.normal), inv(l.tangent), -l.bitangent_sign) for l, v in agh2]
+    mesh.calc_tangents()
+    a = [(inv(v.co), inv(l.normal), inv(l.tangent), -l.bitangent_sign) for l, v in loop_buffer]
     np.fromiter(a, np.dtype("3f,3f,3f,f")).tofile(f"{name}-vb0.buf")
 
-    color = obj.data.vertex_colors[0].data
+    color = mesh.vertex_colors[0].data
     t = [([int(i * 256) for i in color[l.index].color],
-         *[tex.data[l.index].uv for tex in obj.data.uv_layers]) for l, _ in agh2]
+         *[tex.data[l.index].uv for tex in mesh.uv_layers]) for l, _ in loop_buffer]
     np.fromiter(t, np.dtype(vb1_fmt)).tofile(f"{name}-vb1.buf")
 
     r = [([v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)],
-          [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]) for l, v in agh2]
+          [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]) for _, v in loop_buffer]
     np.fromiter(r, np.dtype("4f, 4i")).tofile(f"{name}-vb2.buf")
 
 os.chdir(r"C:\mod\zzmi\FrameAnalysis-2024-12-25-094405")  # ellen
-import_char_from_zzz_analysis("5ac6d5ee", "EllenBody", "4u1,2f2,2f,2f2,2f2")
+zzz_char_import("EllenBody", "5ac6d5ee", "4u1,2f2,2f,2f2,2f2")
 
 os.chdir(r"C:\mod\zzmi\Mods\EllenMod")
 obj0 = bpy.context.selected_objects[0]
-export_zzz_char("EllenBody", obj0, "4u1,2f2,2f,2f2,2f2")
+zzz_char_export("EllenBody", obj0.data, "4u1,2f2,2f,2f2,2f2")
