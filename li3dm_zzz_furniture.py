@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
 import bpy, numpy as np
 
-def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f,2f2"):
+def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f2,2f2"):
     vb_file = glob(f"*vb0={vb0_hash}*.buf")[0]
     vb = np.fromfile(vb_file, np.dtype(vb_fmt))
     ib = np.fromfile(glob(f"{vb_file[:6]}-ib=*.buf")[0], np.dtype("3u2"))
@@ -44,9 +44,10 @@ def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f,2f
     mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
     mesh.normals_split_custom_set_from_vertices([inf(p[1] / 127.0) for p in vb])
 
+    data = [vb[l.vertex_index] for l in mesh.loops]
+    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[2] / 256])
     for i in range(3, len(vb[0])):
-        data = [vb[l.vertex_index][i] for l in mesh.loops]
-        mesh.uv_layers.new().data.foreach_set("uv", np.ravel(data))
+        mesh.uv_layers.new().data.foreach_set("uv", [c for d in data for c in d[i]])
 
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
@@ -54,37 +55,26 @@ def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f,2f
     bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-def export_furniture(name:str):
-    with (open(f"{name}.buf", "wb") as buf,
-          open(f"{name}.ib", "wb") as ib):
-        obj = bpy.context.selected_objects[0].data
-        obj.calc_tangents()
-        index_map = {}
-        idx = 0
-        for loop in obj.loops:
-            co = obj.vertices[loop.vertex_index].co
-            [u, v] = obj.uv_layers[1].data[loop.index].uv
-            nor = numpy.fromiter(loop.normal, numpy.float32)
-            tan = numpy.fromiter(loop.tangent, numpy.float32)
+def export_furniture(name:str, mesh, vb_fmt="4f2,4i1,4u1,2f2"):
+    index_buffer, loop_buffer, index_map, idx = [], [], {}, 0
+    for loop in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
+        h = (loop.vertex_index, *mesh.uv_layers[0].data[loop.index].uv, *loop.normal)
+        if h not in index_map:
+            index_map[h] = idx; idx += 1
+            loop_buffer.append((loop, mesh.vertices[loop.vertex_index]))
+        index_buffer.append(index_map[h])
 
-            h = (loop.vertex_index, u, v, nor[0], nor[1], nor[2])
-            if h in index_map:
-                ib.write(numpy.uint32(index_map[h]))
-                continue
-            index_map[h] = idx
-            ib.write(numpy.uint32(idx))  # ib.write(numpy.uint32(index_map[h]))
-            idx += 1
+    np.fromiter(index_buffer, np.uint16).tofile(f"{name}-ib.buf")
 
-            pos = [-co.x, co.z, -co.y]
-            buf.write(numpy.fromiter(pos, numpy.float16))
-            buf.write(b'\x00\x3c')
-            buf.write((nor * 128.0).astype(numpy.int8))
-            buf.write(b'\x00')
-            buf.write((tan * 128.0).astype(numpy.int8))
-            buf.write(b'\x81' if loop.bitangent_sign > 0 else b'\x7f')
-            [u0, v0] = obj.uv_layers[0].data[loop.index].uv
-            buf.write(numpy.fromiter([u0, v0], numpy.float16))
-            buf.write(numpy.fromiter([u, v], numpy.float16))
+    def inb(vv, q): return -vv[0], vv[2], -vv[1], q
+    mesh.calc_tangents()
+    a = [(inb(v.co, 1.), inb(l.normal * 128.0, 0), inb(l.tangent * 256.0, -l.bitangent_sign),
+          *[tex.data[l.index].uv for tex in mesh.uv_layers]) for l, v in loop_buffer]
+    np.fromiter(a, np.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
 
-os.chdir(r"C:\mod\zzmi\FrameAnalysis-2024-12-28-171842")
-import_collected_furniture("Car2", "a4496188", "4f2,4i1,2f,2f2")
+#os.chdir(r"C:\mod\zzmi\FrameAnalysis-2024-12-29-210904")
+#import_collected_furniture("StandNoviluna", "e478f8f0", "4f2,4i1,4u1,2f2")
+
+os.chdir(r"C:\mod\zzmi\Mods\StandNoviluna")
+mesh0 = bpy.context.selected_objects[0].data
+export_furniture("StandNoviluna", mesh0, "4f2,4i1,4u1,2f2")

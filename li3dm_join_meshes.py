@@ -1,4 +1,4 @@
-import bpy, bmesh
+import bpy, bmesh, numpy as np
 
 def log(data):
     for window in bpy.context.window_manager.windows:
@@ -25,34 +25,30 @@ def doodoo2():
     bpy.context.scene.objects["CouchFinnick"]["scale"] = .25
 #doodoo2()
 
-def join_meshes(objs):
-    bm0 = bmesh.new()
-    depsgraph = bpy.context.evaluated_depsgraph_get()
+def join_meshes(name:str, names, objs, scale=1/4, vb_fmt="4f2,4i1,4i1,2f2"):
+    deps = bpy.context.evaluated_depsgraph_get()
+    def inb(vv, q): return -vv[0], vv[2], -vv[1], q
+    ib, vb0, index_map, idx = [], [], {}, 0
     for obj in objs:
-        pivot_u = obj['pivot_u']
-        pivot_v = obj['pivot_v']
-        #        log(f"parsing {obj.name} (pivot_u={pivot_u},pivot_v={pivot_v},scale={obj['scale']}")
+        [char, part_str, *_] = obj.name.split("_")
+        pivot = np.fromiter((int(part_str), names.index(char)), np.float32)
+        print(f"parsing {obj.name} (pivot={pivot},scale={scale})")
         bm = bmesh.new()
-        bm.from_object(obj, depsgraph)
+        bm.from_object(obj, deps)
         bm.transform(obj.matrix_world)
-        bm.verts.ensure_lookup_table()
-        # bm.faces.flatMap { it.loops }.map { it[bm.loops.layers.uv[0]] }
-        for layer in [loop[bm.loops.layers.uv[0]] for face in bm.faces for loop in face.loops]:
-            layer.uv = pivot_u + obj['scale'] * layer.uv[0], pivot_v + obj['scale'] * layer.uv[1]
-
-        # bmesh doesn't have a "from_bmesh" method, so this ugly piece of code had to me written
-        mesh = bpy.data.meshes.new('Temp')
-        bm.to_mesh(mesh)
-        bm0.from_mesh(mesh)
-        bpy.data.meshes.remove(mesh)
+        for loop in [l for face in bm.faces for l in reversed(face.loops)]:
+            uv, nor = loop[bm.loops.layers.uv[0]].uv, loop.calc_normal()
+            h = (loop.vert.index, *uv, *nor)
+            if h not in index_map:
+                index_map[h] = idx; idx += 1
+                vb0.append((inb(loop.vert.co, 1.), inb(nor * 128.0, 0),
+                        inb(loop.calc_tangent() * 128.0, 127), (pivot + uv) * scale))
+            ib.append(index_map[h])
         bm.free()
 
-    mesh0 = bpy.data.meshes.new('CouchFinnickSumeru')
-    bm0.to_mesh(mesh0)
-    obj0 = bpy.data.objects.new('CouchFinnickSumeru', mesh0)
-    bpy.context.scene.collection.objects.link(obj0)
-    bm0.free()
-# join_meshes(objs)
+    np.fromiter(ib, np.uint16).tofile(f"{name}-ib.buf")
+    np.fromiter(vb0, np.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
+# join_meshes("Furnitest", ["", "Soukaku", "Yanagi", "Unagi"], objs, vb_fmt="4f2,4i1,4i1,2f2,2f2")
 
 def doodoo():
     agh = { "Ayaka":[7,0], "Yoimiya":[6,0], "Shinobu":[5,0], "Kirara":[4,0], "Yae":[3,0], "Kokomi":[2,0], "Chiori":[1,0], "Raiden":[0,0], "Sara":[7,3] }
