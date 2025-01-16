@@ -30,25 +30,28 @@ def join_meshes(name:str, names, objs, scale=1/4, vb_fmt="4f2,4i1,4i1,2f2"):
     def inb(vv, q): return -vv[0], vv[2], -vv[1], q
     ib, vb0, index_map, idx = [], [], {}, 0
     for obj in objs:
+        for mod in [m for m in obj.modifiers if m.type == 'SOLIDIFY' or m.type == 'NODES']:
+            mod.show_viewport = False
         [char, part_str, *_] = obj.name.split("_")
         pivot = np.fromiter((int(part_str), names.index(char)), np.float32)
         print(f"parsing {obj.name} (pivot={pivot},scale={scale})")
         bm = bmesh.new()
         bm.from_object(obj, deps)
         bm.transform(obj.matrix_world)
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
         for loop in [l for face in bm.faces for l in reversed(face.loops)]:
             uv, nor = loop[bm.loops.layers.uv[0]].uv, loop.calc_normal()
             h = (loop.vert.index, *uv, *nor)
             if h not in index_map:
                 index_map[h] = idx; idx += 1
-                vb0.append((inb(loop.vert.co, 1.), inb(nor * 128.0, 0),
-                        inb(loop.calc_tangent() * 128.0, 127), (pivot + uv) * scale))
+                vb0.append((inb(loop.vert.co, 1.), inb(nor * 127., 0),
+                        inb(loop.calc_tangent() * 127., 127), (pivot + uv) * scale))
             ib.append(index_map[h])
         bm.free()
 
     np.fromiter(ib, np.uint16).tofile(f"{name}-ib.buf")
     np.fromiter(vb0, np.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
-# join_meshes("Furnitest", ["", "Soukaku", "Yanagi", "Unagi"], objs, vb_fmt="4f2,4i1,4i1,2f2,2f2")
+# join_meshes("Furnitest", ["", "苍角", "Yanagi", "Unagi"], objs, vb_fmt="4f2,4i1,4i1,2f2,2f2")
 
 def doodoo():
     agh = { "Ayaka":[7,0], "Yoimiya":[6,0], "Shinobu":[5,0], "Kirara":[4,0], "Yae":[3,0], "Kokomi":[2,0], "Chiori":[1,0], "Raiden":[0,0], "Sara":[7,3] }
