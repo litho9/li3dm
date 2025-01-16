@@ -59,17 +59,18 @@ def join_meshes(name:str, objs, names, scale=.25):
     bpy.context.scene.collection.objects.link(obj0)
     bm0.free()
 
-def export_furniture(name:str, mesh, vb_fmt="4f2,4i1,4i1,2f2"):
+def export_furniture(name:str, mesh, vb_fmt="3f2,f2,3i1,i1,3i1,i1,2f2"):
     def inb(vv, q): return -vv[0], vv[2], -vv[1], q
-    ib, vb0, index_map, idx = [], [], {}, 0
+    ib, vb0, index_map = [], [], {}
     for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
-        h = (l.vertex_index, *mesh.uv_layers[0].data[l.index].uv, *l.normal)
+        uvs = [layer.data[l.index].uv for layer in mesh.uv_layers]
+        h = (l.vertex_index, *uvs[0], *l.normal)
         if h not in index_map:
-            index_map[h] = idx; idx += 1
+            index_map[h] = len(vb0)
             vb0.append((inb(mesh.vertices[l.vertex_index].co, 1.),
                         inb(l.normal * 127., 0),
                         inb(l.tangent * 127., -l.bitangent_sign),
-                        *[tex.data[l.index].uv for tex in mesh.uv_layers]))
+                        *[(uv[0], 1 - uv[1]) for uv in uvs]))
         ib.append(index_map[h])
 
     np.fromiter(ib, np.uint16).tofile(f"{name}-ib.buf")
