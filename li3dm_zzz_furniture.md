@@ -38,6 +38,8 @@ export_object("MyObjectIsNowHorny", mesh0)
 
 The whole thing is like 20 lines, but there's a lot of stuff in each of them.
 
+## How does it work?
+
 ```py
 import bpy, os, numpy
 ```
@@ -51,10 +53,10 @@ def export_furniture(name:str, mesh, vb_fmt="4f2,4i1,4i1,2f2"):
 ```
 
 Our function call. The `vb_fmt` is the format for each loop stored in the vb0. By default, it is:
-`4f2` (four 2-byte floats, three for coordinates x, y, z, and one that's always 1.0 (no idea what it represents))
-`4i1` (four 1-byte signed integers, three for split normals x, y, z, and one that's always 0)
-`4i1` (four 1-byte signed integers, three for tangents x, y, z, and one for the bitangent sign, that's always 1.0 or -1.0)
-`2f2` (two 2-byte floats, representing the x and y of a texture map)
+- `4f2` (four 2-byte floats, three for coordinates x, y, z, and one that's always 1.0 (no idea what it represents))
+- `4i1` (four 1-byte signed integers, three for split normals x, y, z, and one that's always 0)
+- `4i1` (four 1-byte signed integers, three for tangents x, y, z, and one for the bitangent sign, that's always 1.0 or -1.0)
+- `2f2` (two 2-byte floats, representing the x and y of a texture map)
 
 the `vb_fmt` is defined as a parameter with a default value because **it can be different**. I've seen objects with an extra texture map, and in that case the param needs another `2f2` at the end.
 
@@ -67,15 +69,13 @@ The rotate/invert function. It rotates your object so it appear the same in-game
 ib, vb0, index_map = [], [], {}
 ```
 
-initializes the two buffers and the "loop cache". This is a good time to explain how the index buffer and the vertex buffer work together.
+initializes the two buffers and the index_map, that holds what loops have already been considered for storing. This is a good time to explain how the index buffer and the vertex buffer work together.
 
 Programmers could just store the data for each loop in a sequence and that'd be enough to reconstruct the object in-game, but that would result in **a lot of repeated data**. You see, it is very common for face-corners to have the same position, the same split-normals, and the same texture coordinates. It is the case for every time a face meets another in a smooth surface.
 
-TODO images
-
 To tackle that, the vertex buffer only stores non-repeated data, and the index buffer maps the sequence of loops to the correspondent data stored in the vertex buffer.
 
-Example: the first three loops form the first triangle of the 3d object. Their data are stored in the vb, and in the ib we store "first block of data, second block of data, third block of data". For the second triangle, we also have three loops, but two of the corners are the same as two from the first triangle. In this case, we can store only the data for the different loop in the vb, and in the ib we store "first block of data, second block of data, fourth block of data".
+Example: the first three loops form the first triangle of the 3d object. Their data are stored in the vb, and in the ib we store "use vb block 0, use vb block 1, use vb block 2". For the second triangle, we also have three loops, but two of the corners are the same as two from the first triangle. In this case, we can store only the data for the different loop in the vb, and in the ib we store "use vb block 0, use vb block 3, use vb block 1".
 
 ![vb-ib](./assets/ib-vb.jpg)
 
@@ -84,7 +84,6 @@ The `index_map` then stores the index for each data combination, mapping to it's
 ```py
 for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
 ```
-
 This line iterates the loops. Instead of just being `for l in mesh.loops` we have to do a little trick here. You see, if we just iterated the loops in order, we would end up with our whole model with **flipped faces**. Loops list faces corners counterclockwise, and when we invert the x-axis we make so the outside and the inside of the faces are switched.
 To avoid that, this reverses every 3 loops, so instead of reading [0, 1, 2, 3, 4, 5, ...], we read [2, 1, 0, 5, 4, 3, ...].
 
