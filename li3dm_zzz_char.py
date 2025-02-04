@@ -18,16 +18,14 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
 
     vb1 = np.fromfile(glob(f"{draw}-vb1=*.buf")[0], np.dtype(vb1_fmt))
     data = [vb1[l.vertex_index] for l in mesh.loops]
-    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[0] / 256])
+    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[0] / 255])
     for i in range(1, len(vb1[0])):
         mesh.uv_layers.new().data.foreach_set("uv", [c for d in data for c in d[i]])
 
-    bld = np.fromfile(glob(f"{draw}-vb2=*.buf")[0], np.dtype("4f, 4i"))
-    c = [(v, w, i) for v in range(len(bld)) for w, i in zip(bld[v][0], bld[v][1]) if w != 0]
-    for i in range(max([x[2] for x in c]) + 1):
-        obj.vertex_groups.new(name=str(i))
-    for v, w, i in c:
-        obj.vertex_groups[i].add((v,), w, 'REPLACE')
+    vb2 = np.fromfile(glob(f"{draw}-vb2=*.buf")[0], np.dtype("4f, 4i"))
+    c = [(v, w, i) for v, b in enumerate(vb2) for w, i in zip(*b) if w]
+    for i in range(max([x[2] for x in c]) + 1): obj.vertex_groups.new(name=str(i))
+    for v, w, i in c: obj.vertex_groups[i].add((v,), w, 'REPLACE')
 
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
@@ -65,7 +63,7 @@ def zzz_char_export(name, mesh, vb1_fmt="4u1,2f2,2f,2f2"):
             index_map[h] = idx; idx += 1  # stoopid python has no 'idx++' syntax
             v = mesh.vertices[loop.vertex_index]
             vb0.append((inv(v.co), inv(loop.normal), inv(loop.tangent), -loop.bitangent_sign))
-            vb1.append(([int(i * 256) for i in mesh.vertex_colors[0].data[loop.index].color],
+            vb1.append(([int(i * 255) for i in mesh.vertex_colors[0].data[loop.index].color],
                         *[tex.data[loop.index].uv for tex in mesh.uv_layers]))
             vb2.append(([v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)],
                         [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]))

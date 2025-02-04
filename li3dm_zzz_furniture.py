@@ -59,7 +59,7 @@ def join_meshes(name:str, objs, names, scale=.25):
     bpy.context.scene.collection.objects.link(obj0)
     bm0.free()
 
-def export_furniture(name:str, mesh, vb_fmt="3f2,f2,3i1,i1,3i1,i1,2f2"):
+def export_furniture(name:str, mesh, vb_fmt="4f2,4i1,4i1,2f2"):
     def inb(vv, q): return -vv[0], vv[2], -vv[1], q
     ib, vb0, index_map = [], [], {}
     for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
