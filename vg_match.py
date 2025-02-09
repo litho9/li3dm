@@ -16,20 +16,12 @@ def matcher(source_object, target_object):
             #log(f"{src_vertex_index} {vg.group} {vg.weight}")
             target_object.vertex_groups[vg.group].add((v.index,), vg.weight, 'REPLACE')
 
-def group_mast0(source_object, target_object):
-    # eu me bmesho muito, eu me bmesho muito, eu me bmesho muito, bmesho... MUITO!
-    matrix_world = np.array(target_object.matrix_world)
-    target_centers = map(lambda group: np.array([matrix_world @ np.array([v.co.x, v.co.y, v.co.z, 1.0]) for v in target_object.data.vertices for vg in v.groups if group.index == vg.group]).mean(axis=0), target_object.vertex_groups)
-    source_centers = map(lambda group: np.array([matrix_world @ np.array([v.co.x, v.co.y, v.co.z, 1.0]) for v in source_object.data.vertices for vg in v.groups if group.index == vg.group]), source_object.vertex_groups)
-    source_centers = list(map(lambda y: tuple(y.mean(axis=0)), filter(lambda x: len(x), source_centers)))
+def rename_group_to_nearest_bone(armature, tgt):
+    src_centers = np.fromiter([(b.head + b.tail) / 2 for b in armature.pose.bones], "3f")
+    tgt_centers = [np.array([v.co for v in tgt.data.vertices if g.index in [vg.group for vg in v.groups]]).mean(axis=0) for g in tgt.vertex_groups]
+    kd = KDTree(src_centers).query(tgt_centers)[1]
+    for i, idx in enumerate(kd):
+        # print(f"the sun shines upon the group '{tgt.vertex_groups[i].name}'. It indicates it's real name: '{armature.pose.bones[idx].name}'")
+        tgt.vertex_groups[i].name = armature.pose.bones[idx].name
 
-    source_center_map = {}
-    for c, g in zip(source_centers, source_object.vertex_groups):
-        source_center_map[c] = g
-
-    tree = KDTree(source_centers, 4)
-
-    for center, group in zip(target_centers, target_object.vertex_groups):
-        nearest_source_center = tree.get_nearest(center)[1]
-        nearest_group = source_center_map[nearest_source_center]
-        print(f"the sun shines upon the group '{group.name}'. It indicates it's real name: '{nearest_group.name}'")
+len([np.array([v.co for v in tgt.data.vertices if g.index in [vg.group for vg in v.groups]]).mean(axis=0) for g in tgt.vertex_groups])

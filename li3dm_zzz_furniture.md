@@ -55,10 +55,10 @@ def export_furniture(name:str, mesh, vb_fmt="4f2,4i1,4i1,2f2"):
 Our function call. The `vb_fmt` is the format for each loop stored in the vb0. By default, it is:
 - `4f2` (four 2-byte floats, three for coordinates x, y, z, and one that's always 1.0 (no idea what it represents))
 - `4i1` (four 1-byte signed integers, three for split normals x, y, z, and one that's always 0)
-- `4i1` (four 1-byte signed integers, three for tangents x, y, z, and one for the bitangent sign, that's always 1.0 or -1.0)
-- `2f2` (two 2-byte floats, representing the x and y of a texture map)
+- `4i1` (four 1-byte signed integers, three for tangents x, y, z, and one for the bitangent sign, that's always 1 or -1)
+- `2f2` (two 2-byte floats, representing the u and v of a texture map, for uorizontal and vertical)
 
-the `vb_fmt` is defined as a parameter with a default value because **it can be different**. I've seen objects with an extra texture map, and in that case the param needs another `2f2` at the end.
+the `vb_fmt` is defined as a parameter with a default value because **it can vary**. I've seen objects with an extra texture map, and in that case the param needs another `2f2` at the end.
 
 ```py 
 def inb(vv, q): return -vv[0], vv[2], -vv[1], q
@@ -69,7 +69,7 @@ The rotate/invert function. It rotates your object so it appear the same in-game
 ib, vb0, index_map = [], [], {}
 ```
 
-initializes the two buffers and the index_map, that holds what loops have already been considered for storing. This is a good time to explain how the index buffer and the vertex buffer work together.
+initializes the two buffers and the index_map, the latter holding what loops have already been considered for storing. This is a good time to explain how the index buffer and the vertex buffer work together.
 
 Programmers could just store the data for each loop in a sequence and that'd be enough to reconstruct the object in-game, but that would result in **a lot of repeated data**. You see, it is very common for face-corners to have the same position, the same split-normals, and the same texture coordinates. It is the case for every time a face meets another in a smooth surface.
 
@@ -79,12 +79,14 @@ Example: the first three loops form the first triangle of the 3d object. Their d
 
 ![vb-ib](./assets/ib-vb.jpg)
 
+Loops using the same vertex would not use the same vb if the faces meet in a hard edge (like the cyan lines of the image), or if the faces are separated in the texture map.
+
 The `index_map` then stores the index for each data combination, mapping to it's position on the vb.
 
 ```py
 for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
 ```
-This line iterates the loops. Instead of just being `for l in mesh.loops` we have to do a little trick here. You see, if we just iterated the loops in order, we would end up with our whole model with **flipped faces**. Loops list faces corners counterclockwise, and when we invert the x-axis we make so the outside and the inside of the faces are switched.
+This line iterates the loops. Instead of just being `for l in mesh.loops` we have to do a little trick here. You see, if we just iterated the loops in order, the model would end up with **flipped faces**. Loops list faces corners counterclockwise, and when we invert the x-axis we make so the outside and the inside of the faces are switched.
 To avoid that, this reverses every 3 loops, so instead of reading [0, 1, 2, 3, 4, 5, ...], we read [2, 1, 0, 5, 4, 3, ...].
 
 ```py

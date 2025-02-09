@@ -1,6 +1,8 @@
 import bpy, bmesh, numpy as np, os
 from glob import glob
 
+# https://gist.github.com/litho9/bacf2eb1de1367d2803f7116749df86f
+
 def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f2,2f2"):
     vb_file = glob(f"*vb0={vb0_hash}*.buf")[0]
     vb = np.fromfile(vb_file, np.dtype(vb_fmt))
@@ -10,12 +12,12 @@ def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4u1,2f2,2
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(mesh.name, mesh)
     bpy.context.scene.collection.objects.link(obj)
+
     mesh.from_pydata([inf(p[0]) for p in vb], [], [list(reversed(p)) for p in ib])
     mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
     mesh.normals_split_custom_set_from_vertices([inf(p[1] / 127.) for p in vb])
-
     data = [vb[l.vertex_index] for l in mesh.loops]
-    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[2] / 256])
+    mesh.vertex_colors.new().data.foreach_set("color", [c for d in data for c in d[2] / 255])
     for i in range(3, len(vb[0])):
         mesh.uv_layers.new().data.foreach_set("uv", [c for d in data for c in d[i]])
 
@@ -36,7 +38,7 @@ def join_meshes(name:str, objs, names, scale=.25):
         pivot = np.fromiter((int(part_str), names.index(char)), np.float32)
         print(f"parsing {obj.name} (pivot={pivot},scale={scale})")
 
-        bm = bmesh.new()
+        bm = bmesh.new()  # eu me bmesho muito, eu me bmesho muito, eu me bmesho muito, bmesho... MUITO!
         bm.from_object(obj, deps)
         bm.transform(obj.matrix_world)
         bmesh.ops.triangulate(bm, faces=bm.faces)
