@@ -1,5 +1,52 @@
 # ZZZ Object Import/Export
 
+## Import
+
+```py
+import bpy, numpy, os
+from glob import glob
+
+def import_collected_furniture(name:str, vb0_hash:str, vb_fmt="4f2,4i1,4i1,2f2"):
+    vb_file = glob(f"*vb0={vb0_hash}*.buf")[0]
+    vb = numpy.fromfile(vb_file, numpy.dtype(vb_fmt))
+    ib = numpy.fromfile(glob(f"{vb_file[:6]}-ib=*.buf")[0], numpy.dtype("3u2"))
+
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(mesh.name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+
+    def inf(vv): return -vv[0], -vv[2], vv[1]
+    mesh.from_pydata([inf(p[0]) for p in vb], [], [list(reversed(p)) for p in ib])
+    mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
+    mesh.normals_split_custom_set_from_vertices([inf(p[1] / 127) for p in vb])
+    for i in range(3, len(vb[0])):
+        uv_data = [c for l in mesh.loops for c in vb[l.vertex_index][i]]
+        mesh.uv_layers.new().data.foreach_set("uv", uv_data)
+
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    mat = bpy.data.materials.new(f"{name}Diffuse")
+    obj.data.materials.append(mat)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    tex_image = mat.node_tree.nodes.new('ShaderNodeTexImage')
+    diffuse = glob(f"{vb_file[:6]}-ps-t2=*.dds")[0]
+    img = bpy.data.images.load(os.path.abspath(diffuse), check_existing=True)
+    tex_image.image = img
+    mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
+    with bpy.context.temp_override(edit_image=img):
+        bpy.ops.image.flip(use_flip_y=True)
+
+os.chdir(r"C:\Users\urmom\Documents\create\mod\zzmi\FrameAnalysis-2025-01-17-150151")
+import_collected_furniture("ThisRandomSofa", "a234e81c")
+```
+
+This script reads data directly from the "FrameAnalysis" folder and creates the object in Blender.
+
 ## Export
 
 For objects, different from characters, there's only one vertex-buffer (only vb0 and no vb1 and vb2).
@@ -38,7 +85,7 @@ export_object("MyObjectIsNowHorny", mesh0)
 
 The whole thing is like 20 lines, but there's a lot of stuff in each of them.
 
-## How does it work?
+### How does it work?
 
 ```py
 import bpy, os, numpy
@@ -126,7 +173,7 @@ numpy.fromiter(vb0, numpy.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
 ```
 Lastly, we save the ib and vb0 to `.buf` files. Note that the game originally uses uint16 for each index in the ib, but if our model has more than 2¹⁶ (65536) values stored in the vb0, we will need to change it to unit32.
 
-## Usage example
+### Usage example
 
 ```py
 os.chdir(r"C:\Users\urmom\Documents\create\mod\zzmi\Mods\MyObjectMod")
@@ -137,4 +184,4 @@ With `chdir` we can change the current directory we're in, so the generated file
 The `mesh0` holds the data for the current selected object.
 
 ## TL;DR
-There's no TL;DR, Read the damn thing. If you really want to get how this works, you'll have to take your time to learn it. 
+There's no TL;DR, Read the damn thing. 

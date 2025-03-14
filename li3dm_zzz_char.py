@@ -27,20 +27,33 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     for i in range(max([x[2] for x in c]) + 1): obj.vertex_groups.new(name=str(i))
     for v, w, i in c: obj.vertex_groups[i].add((v,), w, 'REPLACE')
 
+    with open("log.txt", encoding='utf-8') as log_file:
+        while not log_file.readline().startswith(f"{draw} CopyResource"): continue
+        line = log_file.readline()
+    sk_ids = [f[:6] for f in glob(f"*u0={line[line.rfind('=') + 1:-1]}*.buf")]
+    shape_keys = [np.fromfile(sk, "i,i,f,f")[0] for sk_id in sk_ids
+                  for sk in glob(f"{sk_id}-cs-cb0*.buf")] # offset, count, multiplier, garbage
+    cs_t0 = np.fromfile(glob(f"{sk_ids[0]}-cs-t0*.buf")[0], "i,3f,3f,3f") # vertex_index, pos, normal, tangent
+    for idx, pos, mult in [(cs_t0[i][0], cs_t0[i][1], sk[2]) for sk in shape_keys for i in range(sk[0], sk[0]+sk[1])]:
+        for j in range(3): mesh.vertices[idx].co[j] -= pos[j]*mult
+
+    obj.shape_key_add(name="Basis", from_mix=False)
+    sk = obj.shape_key_add(name="0", from_mix=False)
+    last_idx = -1
+    for offset, (idx, pos, *_) in enumerate(cs_t0):
+        if idx <= last_idx:
+            sk = obj.shape_key_add(name=str(offset), from_mix=False)
+        for j in range(3): sk.data[idx].co[j] += pos[j]
+        last_idx = idx
+
+    for sk in shape_keys:
+        obj.data.shape_keys.key_blocks[str(sk[0])].value = sk[2]
+
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # for chunk in t0_chunks:
-    #     for j in range(chunk['offset'], chunk['count'] + chunk['offset']):
-    #         vb['pos'][t0[j]['vertindex']] -= t0[j]['pos']
-    # for chunk in t0_chunks:
-    #     co = np.zeros(len(mesh.vertices), dtype=(np.float32,3))
-    #     for j in range(chunk['offset'], chunk['count'] + chunk['offset']):
-    #         co[t0[j]['vertindex']] = t0[j]['pos']
-    #     obj.shape_key_add().data.foreach_set('co', co.ravel()+vb['pos'].ravel())
 
     mat = bpy.data.materials.new(f"{name}Diffuse")
     obj.data.materials.append(mat)
@@ -53,7 +66,6 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     with bpy.context.temp_override(edit_image=img):
         bpy.ops.image.flip(use_flip_y=True)
 
-# noinspection PyTypeChecker
 def zzz_char_export(name, mesh, vb1_fmt="4u1,2f2,2f,2f2"):
     mesh.calc_tangents()
     ib, vb0, vb1, vb2, index_map, idx = [], [], [], [], {}, 0
