@@ -98,10 +98,12 @@ export_furniture("StandNoviluna", mesh0, "4f2,4i1,4i1,2f2")
 
 def export_parts(name:str, vb_fmt="4f2,4i1,4i1,2f2"):
     def inb(vv, q): return -vv[0], vv[2], -vv[1], q
-    objs = sorted(bpy.context.selected_objects, key=lambda x: x.name)
+    deps = bpy.context.evaluated_depsgraph_get()
     ib, vb0, index_map = [], [], {}
-    for i, mesh in enumerate([o.data for o in objs]):
-        print(f"; {mesh.name}\nmatch_first_index = {len(vb0)}\ndrawindexed = {len(mesh.loops)}, {len(ib)}, 0")
+    for obj in sorted(bpy.context.selected_objects, key=lambda x: x.name):
+        mesh = bpy.data.meshes.new("Temp")
+        bm = bmesh.new(); bm.from_object(obj, deps); bm.transform(obj.matrix_world); bm.to_mesh(mesh)
+        print(f"; {obj.name}\ndrawindexed = {len(mesh.loops)}, {len(ib)}, 0")
         for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
             uvs = [layer.data[l.index].uv for layer in mesh.uv_layers]
             h = (l.vertex_index, *uvs[0], *l.normal)
@@ -110,8 +112,10 @@ def export_parts(name:str, vb_fmt="4f2,4i1,4i1,2f2"):
                 vb0.append((inb(mesh.vertices[l.vertex_index].co, 1.),
                             inb(l.normal * 127., 0),
                             inb(l.tangent * 127., -l.bitangent_sign),
-                            *[(uv[0], 1 - uv[1]) for uv in uvs]))
+                            *uvs))
             ib.append(index_map[h])
+        bpy.data.meshes.remove(mesh)
+        bm.free()
 
     np.fromiter(ib, np.uint32).tofile(f"{name}-ib.buf")
     np.fromiter(vb0, np.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
