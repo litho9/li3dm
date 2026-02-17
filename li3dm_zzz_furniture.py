@@ -96,26 +96,58 @@ os.chdir(r"C:\mod\zzmi\Mods\StandNoviluna")
 mesh0 = bpy.context.selected_objects[0].data
 export_furniture("StandNoviluna", mesh0, "4f2,4i1,4i1,2f2")
 
-def export_parts(name:str, vb_fmt="4f2,4i1,4i1,2f2"):
+def zzz_export_furniture_data(objs, frames=100):
+    ib, idx, m = [], 0, []
+    for obj in objs:
+        index_map = {}
+        m.append([])
+        mesh = obj.data
+        print(f"; {obj.name}\ndrawindexed = {len(mesh.loops)}, {len(ib)}, 0")
+        mesh.calc_tangents()
+        for loop in [mesh.loops[i] for p in mesh.polygons for i in reversed(p.loop_indices)]:
+            h = (loop.vertex_index, *mesh.uv_layers[0].data[loop.index].uv, *loop.normal)
+            if h not in index_map:
+                index_map[h] = idx; idx += 1  # stoopid python has no i++ syntax
+                m[-1].append(loop.index)
+            ib.append(index_map[h])
+    print(f"\n$vert_count={idx}\n")
+
     def inb(vv, q): return -vv[0], vv[2], -vv[1], q
     deps = bpy.context.evaluated_depsgraph_get()
-    ib, vb0, index_map = [], [], {}
-    for obj in sorted(bpy.context.selected_objects, key=lambda x: x.name):
-        mesh = bpy.data.meshes.new("Temp")
-        bm = bmesh.new(); bm.from_object(obj, deps); bm.transform(obj.matrix_world); bm.to_mesh(mesh)
-        print(f"; {obj.name}\ndrawindexed = {len(mesh.loops)}, {len(ib)}, 0")
-        for l in [mesh.loops[i+2-i%3*2] for i in range(len(mesh.loops))]:
-            uvs = [layer.data[l.index].uv for layer in mesh.uv_layers]
-            h = (l.vertex_index, *uvs[0], *l.normal)
-            if h not in index_map:
-                index_map[h] = len(vb0)
-                vb0.append((inb(mesh.vertices[l.vertex_index].co, 1.),
-                            inb(l.normal * 127., 0),
-                            inb(l.tangent * 127., -l.bitangent_sign),
-                            *uvs))
-            ib.append(index_map[h])
-        bpy.data.meshes.remove(mesh)
-        bm.free()
+    vb0 = []
+    for i in range(1, frames + 1):
+        print(f"creating frame {i}")
+        bpy.context.scene.frame_set(i)
+        for obj_idx, obj in enumerate(objs):
+            bm = bmesh.new()
+            bm.from_object(obj, deps)
+            bm.faces.ensure_lookup_table()
+            bm.transform(obj.matrix_world)
+            print(f"{i} obj={obj.name}")
 
-    np.fromiter(ib, np.uint32).tofile(f"{name}-ib.buf")
-    np.fromiter(vb0, np.dtype(vb_fmt)).tofile(f"{name}-vb0.buf")
+            agh = {}  # bmesh is dumb
+            for face in bm.faces:
+                for l in face.loops:
+                    agh[l.index] = l
+
+            # for loop in [l for face in bm.faces for l in reversed(face.loops)]:
+            for loop in (agh[loop_idx] for loop_idx in m[obj_idx]):
+                co = inb(loop.vert.co, 1.)
+                nor = inb(loop.calc_normal() * 127., 0)
+                bit = obj.data.loops[loop.index].bitangent_sign
+                tan = inb(loop.calc_tangent() * 127., -bit * 127.)
+                uv = obj.data.uv_layers[0].data[loop.index].uv
+                vb0.append((co, nor, tan, (0,-256), uv, uv))
+            bm.free()
+    return ib, vb0
+
+print("\n\n Coffee Table - S6 Maids!!")
+os.chdir(r"C:\mod\zzmi\Mods\[obj] CoffeeTableS6Maids [lioh]")
+naems = ["CoffeeTable", "Miyabi1Face", "Miyabi2Hair", "MiyabiMaidBody.bodyN", "Aokaku_Face.001", "Soukaku2Hair", "Soukaku3Body", "SoukakuN.nokeys", "MiyabiMaidBody.maid", "Maid.apron.raster", "Maid.shirt.raster", "Maid.thong.raster", "SoukakuMaid.socks.001", "Cum Anim.006"]
+#naems = ["CoffeeTable"]
+#objs = sorted(bpy.context.selected_objects, key=lambda x: x.name)
+objs = list((bpy.data.objects[n] for n in naems))
+ib, vb0 = zzz_export_furniture_data(objs, frames=100)
+np.fromiter(ib, np.uint32).tofile("CoffeeTable-ib.buf")
+np.fromiter(vb0, np.dtype("4f2,4i1,4i1,2i2,2f2,2f2")).tofile("CoffeeTable-vb0.buf")
+print("abacou")

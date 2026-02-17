@@ -39,10 +39,6 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
             mesh.vertices[cs_t0[i][0]].co[0] += cs_t0[i][1][0]*mult
             mesh.vertices[cs_t0[i][0]].co[1] -= cs_t0[i][1][1]*mult
             mesh.vertices[cs_t0[i][0]].co[2] -= cs_t0[i][1][2]*mult
-
-    # for idx, pos, mult in [(cs_t0[i][0], cs_t0[i][1], sk[2]) for sk in shape_keys for i in range(sk[0], sk[0]+sk[1])]:
-    #     for j in range(3): mesh.vertices[idx].co[j] -= pos[j]*mult
-
     obj.shape_key_add(name="Basis", from_mix=False)
     sk = obj.shape_key_add(name="0", from_mix=False)
     last_idx = -1
@@ -53,14 +49,13 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
         sk.data[idx].co[1] += pos[1]
         sk.data[idx].co[2] += pos[2]
         last_idx = idx
-
-    for sk in shape_keys:
-        obj.data.shape_keys.key_blocks[str(sk[0])].value = sk[2]
+    # for sk in shape_keys:
+    #     obj.data.shape_keys.key_blocks[str(sk[0])].value = sk[2]
 
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=.000001, use_sharp_edge_from_normals=True)
+    bpy.ops.mesh.remove_doubles(threshold=1e-6, use_sharp_edge_from_normals=True)
     bpy.ops.object.mode_set(mode='OBJECT')
 
     mat = bpy.data.materials.new(f"{name}Material")
@@ -73,6 +68,13 @@ def zzz_char_import(name:str, vb1_hash:str, vb1_fmt="4u1,2f2,2f,2f2"):
     mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
     with bpy.context.temp_override(edit_image=img):
         bpy.ops.image.flip(use_flip_y=True)
+
+def export_shape_key(obj, sk_idx=0):
+    z = zip(obj.data.vertices, obj.data.shape_keys.key_blocks[sk_idx].data)
+    cst0 = [(v.index, inv(skv.co - v.co), (0.,)*6) for (v, skv) in z if v.co != skv.co]
+    np.fromiter(cst0, "i,3f,6f").tofile("Soukaku1Face-cs-t0.buf")
+#os.chdir(r"C:\mod\zzmi\Mods\SoukakuHalf")
+#export_shape_key(bpy.data.objects['Aokaku_Face.001'], 54)
 
 def zzz_char_export(name, objs, vb1_fmt="4u1,2f2,2f,2f2"):
     ib, vb0, vb1, vb2, index_map = [], [], [], [], {}
@@ -89,8 +91,7 @@ def zzz_char_export(name, objs, vb1_fmt="4u1,2f2,2f,2f2"):
                 vb0.append((inv(v.co), inv(loop.normal), inv(loop.tangent), -loop.bitangent_sign))
                 vb1.append(([int(i * 255) for i in mesh.vertex_colors[0].data[loop.index].color],
                             *[tex.data[loop.index].uv for tex in mesh.uv_layers]))
-                vb2.append(([v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)],
-                            [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]))
+                vb2.append(zip(*(list((g.weight,g.group) for g in v.groups) + [(.0,0)]*(4-len(v.groups)))))
             ib.append(index_map[h])
     print(f"draw = {len(vb0)}, 0")
 
@@ -98,6 +99,31 @@ def zzz_char_export(name, objs, vb1_fmt="4u1,2f2,2f,2f2"):
     np.fromiter(vb0, "3f,3f,3f,f").tofile(f"{name}-vb0.buf")
     np.fromiter(vb1, vb1_fmt).tofile(f"{name}-vb1.buf")
     np.fromiter(vb2, "4f, 4i").tofile(f"{name}-vb2.buf")
+
+def zzz_export_char_materials(name:str, obj, vb1_fmt="4f2,4i1,4i1,2f2"):
+    mesh = obj.data
+    mesh.calc_tangents()
+    ib, vb0, vb1, vb2, index_map, offset = [], [], [], [], {}, 0
+    for m in obj.material_slots:
+        for loop in [mesh.loops[i] for p in mesh.polygons for i in reversed(p.loop_indices) if p.material_index == m.slot_index]:
+            h = (loop.vertex_index, *mesh.uv_layers[0].data[loop.index].uv, *loop.normal)
+            if h not in index_map:
+                index_map[h] = len(vb0)
+                v = mesh.vertices[loop.vertex_index]
+                vb0.append((inv(v.co), inv(loop.normal), inv(loop.tangent), -loop.bitangent_sign))
+                vb1.append(([int(i * 255) for i in mesh.vertex_colors[0].data[loop.index].color],
+                            *[tex.data[loop.index].uv for tex in mesh.uv_layers]))
+                vb2.append(([v.groups[i].weight if i < len(v.groups) else .0 for i in range(4)],
+                            [v.groups[i].group if i < len(v.groups) else 0 for i in range(4)]))
+            ib.append(index_map[h])
+        print(f"; {m.name}\ndrawindexed = {len(ib) - offset}, {offset}, 0")
+        offset = len(ib)
+    print(f"draw = {len(vb0)}")
+
+    np.fromiter(ib, np.uint32).tofile(f"{name}IB.buf")
+    np.fromiter(vb0, "3f,3f,3f,f").tofile(f"{name}VB0.buf")
+    np.fromiter(vb1, vb1_fmt).tofile(f"{name}VB1.buf")
+    np.fromiter(vb2, "4f, 4i").tofile(f"{name}VB2.buf")
 
 def read_buffers(vb1_hash:str, ib="3u2", vb0="3f,3f,4f", vb1="4u1,2f2,2f,2f2", vb2="i4"):
     vb1_files = glob(f"*vb1={vb1_hash}*.buf")
@@ -147,4 +173,3 @@ def get_ini_text(part, n:str, vb_len:int, vb1_stride=20):
 [{r}VB1]\ntype = Buffer\nstride = {vb1_stride}\nfilename = {n}-vb1.buf
 [{r}VB2]\ntype = Buffer\nstride = 32\nfilename = {n}-vb2.buf
 [{r}IB]\ntype = Buffer\nformat = DXGI_FORMAT_R16_UINT\nfilename = {n}-ib.buf"""
-
